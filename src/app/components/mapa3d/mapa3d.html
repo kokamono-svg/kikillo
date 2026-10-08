@@ -1,0 +1,165 @@
+
+<div class="dashboard">
+
+  <!-- ENCABEZADO -->
+  <header class="header">
+
+    <div>
+      <h1>Control de Almacenes 3D</h1>
+      <p>Administración de inventario y ubicaciones</p>
+    </div>
+
+    @if (vista() === 'interior') {
+      <button class="btn-volver" (click)="mostrarExterior()">
+        ← Volver al exterior
+      </button>
+    }
+
+  </header>
+
+  <main class="contenido">
+
+    <!-- VISOR 3D -->
+    <section class="visor">
+
+      <div #contenedor3d class="canvas3d"></div>
+
+      <div class="titulo-visor">
+        @if (vista() === 'exterior') {
+          Vista general de almacenes
+        } @else {
+          Interior: {{ almacenSeleccionado()?.nombre }}
+        }
+      </div>
+
+      <div class="controles">
+        <span>🖱️ Arrastrar: girar</span>
+        <span>🔍 Rueda: zoom</span>
+        <span>👆 Clic: seleccionar</span>
+      </div>
+
+    </section>
+
+    <!-- PANEL LATERAL -->
+    <aside class="panel">
+
+      @if (vista() === 'exterior') {
+
+        <h2>Almacenes</h2>
+        <p>Selecciona un edificio para explorar su interior.</p>
+
+        <div class="lista-almacenes">
+
+          @for (almacen of almacenes; track almacen.id) {
+
+            <button
+              class="tarjeta-almacen"
+              (click)="entrarAlmacen(almacen.id)"
+            >
+
+              <span class="icono-almacen">🏭</span>
+
+              <div>
+                <strong>{{ almacen.nombre }}</strong>
+                <small>{{ almacen.descripcion }}</small>
+                <span class="enlace">Explorar interior →</span>
+              </div>
+
+            </button>
+
+          }
+
+        </div>
+
+      } @else {
+
+        <div class="detalle-almacen">
+
+          <span class="etiqueta">ALMACÉN SELECCIONADO</span>
+
+          <h2>{{ almacenSeleccionado()?.nombre }}</h2>
+
+          <p>{{ almacenSeleccionado()?.descripcion }}</p>
+
+          <div class="resumen">
+            <div>
+              <strong>12</strong>
+              <span>Estanterías</span>
+            </div>
+
+            <div>
+              <strong>4</strong>
+              <span>Niveles por estantería</span>
+            </div>
+          </div>
+
+          <hr />
+
+          <h3>Información de estantería</h3>
+
+          @if (estanteriaSeleccionada(); as estanteria) {
+
+            <div class="informacion-estanteria">
+
+              <div class="codigo">
+                <span>Ubicación</span>
+                <h2>{{ estanteria.id }}</h2>
+              </div>
+
+              <div class="fila-dato">
+                <span>Capacidad total</span>
+                <strong>{{ estanteria.capacidad }}</strong>
+              </div>
+
+              <div class="fila-dato">
+                <span>Artículos almacenados</span>
+                <strong>{{ estanteria.ocupados }}</strong>
+              </div>
+
+              <div class="fila-dato">
+                <span>Artículos prestados</span>
+                <strong>{{ estanteria.prestados }}</strong>
+              </div>
+
+              <div class="fila-dato">
+                <span>Espacios disponibles</span>
+                <strong>
+                  {{ estanteria.capacidad - estanteria.ocupados }}
+                </strong>
+              </div>
+
+              <div class="barra-ocupacion">
+                <div
+                  [style.width.%]="
+                    estanteria.ocupados / estanteria.capacidad * 100
+                  "
+                ></div>
+              </div>
+
+              <small>
+                Ocupación:
+                {{
+                  estanteria.ocupados / estanteria.capacidad * 100
+                }}%
+              </small>
+
+            </div>
+
+          } @else {
+
+            <div class="mensaje">
+              📦 Selecciona una estantería del modelo 3D
+              para consultar su información.
+            </div>
+
+          }
+
+        </div>
+
+      }
+
+    </aside>
+
+  </main>
+
+</div>
