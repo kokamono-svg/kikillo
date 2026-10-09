@@ -9,16 +9,26 @@
 #     CORS(app, origins=["http://localhost:4200"])
 #     app.register_blueprint(rh_bp)
 #
-# PENDIENTE: estos endpoints aún no revisan login ni rol de RH.
+# Todos los endpoints exigen sesión con rol "rh" o "admin" (ver auth_routes.py).
 # =====================================================================
 import re
-from flask import Blueprint, jsonify, request
-from sqlalchemy import text
+from datetime import date, datetime, timedelta
+from flask import Blueprint, g, jsonify, request
+from sqlalchemy import bindparam, text
 from sqlalchemy.exc import IntegrityError
 
+from auth_routes import verificar_sesion
 from extensions import db  # tu instancia: db = SQLAlchemy()
 
 rh_bp = Blueprint("rh", __name__, url_prefix="/api/rh")
+
+
+@rh_bp.before_request
+def solo_rh():
+    """Se ejecuta antes de CADA endpoint de este archivo: sin sesión de RH no pasa nadie."""
+    if request.method == "OPTIONS":
+        return None  # el preflight de CORS no lleva token
+    return verificar_sesion(("rh", "admin"))
 
 # Mismas reglas que el formulario de Angular (el backend nunca confía en el frontend)
 PATRONES = {
@@ -244,7 +254,8 @@ def vales(tid):
 @rh_bp.post("/trabajadores/<int:tid>/vales/adeudos")
 def generar_vale_adeudos(tid):
     """Crea un vale ADE-#### con lo que el trabajador debe en este momento."""
-    emitido_por = ((request.get_json(silent=True) or {}).get("emitidoPor") or "Recursos Humanos")[:80]
+    # Quien emite es el usuario de la sesión, no lo que mande el navegador
+    emitido_por = g.usuario.nombre[:80]
     if not _buscar_trabajador(tid):
         return _error("Trabajador no encontrado.", 404)
 
@@ -308,3 +319,107 @@ def registrar_baja():
     except Exception:
         db.session.rollback()
         return _error("Error interno al registrar la baja.", 500)
+
+
+# ---------------------------------------------------------------------
+# TABLERO
+# ---------------------------------------------------------------------
+DOCUMENTOS = [
+    ("doc_identificacion", "Identificación oficial"),
+    ("doc_comprobante_dom", "Comprobante de domicilio"),
+    ("doc_datos_bancarios", "Datos bancarios"),
+    ("doc_contrato_firmado", "Contrato firmado"),
+    ("doc_alta_imss", "Alta en el IMSS"),
+]
+
+
+def _dias_desde(fecha):
+    dia = fecha.date() if isinstance(fecha, datetime) else fecha
+    return max(0, (date.today() - dia).days)
+
+
+@rh_bp.get("/resumen")
+def resumen():
+    """GET /api/rh/resumen -> números del tablero de RH (ver ResumenRh en rh.model.ts)."""
+    hace30 = date.today() - timedelta(days=30)
+
+    conteo = db.session.execute(text("""
+        SELECT COALESCE(SUM(activo), 0) AS activos,
+               COALESCE(SUM(NOT activo), 0) AS inactivos,
+               COALESCE(SUM(activo AND fecha_ingreso >= :d), 0) AS altas,
+               COALESCE(SUM(NOT activo AND fecha_baja >= :d), 0) AS bajas
+        FROM trabajadores
+    """), {"d": hace30}).fetchone()
+
+    # Quién debe equipo: misma regla que SQL_ADEUDOS, pero de todos los trabajadores
+    deudas = db.session.execute(text("""
+        SELECT x.trabajador_id, SUM(x.pendiente) AS articulos, MIN(x.fecha_entrega) AS desde
+        FROM (
+            SELECT m.trabajador_id,
+                   SUM(CASE WHEN m.tipo IN ('ENTREGA','REPOSICION') THEN m.cantidad ELSE 0 END)
+                 - SUM(CASE WHEN m.tipo = 'DEVOLUCION' THEN m.cantidad ELSE 0 END) AS pendiente,
+                   MIN(m.fecha) AS fecha_entrega
+            FROM movimientos m
+            JOIN articulos a ON a.id = m.articulo_id
+            WHERE a.tipo <> 'Consumible'
+            GROUP BY m.trabajador_id, m.articulo_id, m.id_serie
+            HAVING pendiente > 0
+        ) x
+        GROUP BY x.trabajador_id
+        ORDER BY desde
+    """)).fetchall()
+    ids = [f.trabajador_id for f in deudas]
+    deudores = {}
+    if ids:
+        filas = db.session.execute(
+            text(SQL_TRABAJADOR + " WHERE id IN :ids").bindparams(bindparam("ids", expanding=True)), {"ids": ids}
+        ).fetchall()
+        deudores = {f.id: _trabajador_json(f) for f in filas}
+    con_adeudos = [
+        {"trabajador": deudores[f.trabajador_id], "articulos": int(f.articulos), "diasMayor": _dias_desde(f.desde)}
+        for f in deudas if f.trabajador_id in deudores
+    ]
+
+    # Expedientes incompletos (solo activos)
+    faltantes = " OR ".join(f"NOT {col}" for col, _ in DOCUMENTOS) + " OR NOT induccion_seguridad"
+    pendientes = []
+    for f in db.session.execute(text(SQL_TRABAJADOR + f" WHERE activo AND ({faltantes}) ORDER BY fecha_ingreso DESC")).fetchall():
+        faltan = [texto for col, texto in DOCUMENTOS if not getattr(f, col)]
+        if not f.induccion_seguridad:
+            faltan.append("Inducción de seguridad")
+        pendientes.append({"trabajador": _trabajador_json(f), "faltan": faltan})
+
+    por_area = [{"area": f.area, "total": f.total} for f in db.session.execute(text("""
+        SELECT area, COUNT(*) AS total FROM trabajadores WHERE activo GROUP BY area ORDER BY total DESC, area
+    """)).fetchall()]
+
+    movimientos = [{
+        "id": f.id, "fecha": _iso(f.fecha), "tipo": f.tipo, "articuloClave": f.clave,
+        "descripcion": f.descripcion, "tipoArticulo": f.tipo_articulo, "idSerie": f.id_serie,
+        "cantidad": f.cantidad, "almacen": f.almacen, "folioVale": f.folio, "responsable": f.responsable,
+        "trabajadorId": f.trabajador_id, "trabajador": f.trabajador,
+    } for f in db.session.execute(text("""
+        SELECT m.id, m.fecha, m.tipo, a.clave, a.descripcion, a.tipo AS tipo_articulo,
+               m.id_serie, m.cantidad, al.nombre AS almacen, v.folio, m.responsable, m.trabajador_id,
+               CONCAT_WS(' ', t.nombres, t.apellido_paterno, t.apellido_materno) AS trabajador
+        FROM movimientos m
+        JOIN articulos a     ON a.id = m.articulo_id
+        JOIN almacenes al    ON al.id = m.almacen_id
+        JOIN trabajadores t  ON t.id = m.trabajador_id
+        LEFT JOIN vales v    ON v.id = m.vale_id
+        ORDER BY m.fecha DESC, m.id DESC
+        LIMIT 8
+    """)).fetchall()]
+
+    altas = [{"trabajador": _trabajador_json(f), "tipo": "alta", "fecha": _iso(f.fecha_ingreso), "detalle": f.puesto}
+             for f in db.session.execute(text(SQL_TRABAJADOR + " WHERE fecha_ingreso <= CURDATE() ORDER BY fecha_ingreso DESC LIMIT 6")).fetchall()]
+    bajas = [{"trabajador": _trabajador_json(f), "tipo": "baja", "fecha": _iso(f.fecha_baja), "detalle": f.motivo_baja or ""}
+             for f in db.session.execute(text(SQL_TRABAJADOR + " WHERE NOT activo AND fecha_baja IS NOT NULL ORDER BY fecha_baja DESC LIMIT 6")).fetchall()]
+    recientes = sorted(altas + bajas, key=lambda r: r["fecha"], reverse=True)[:6]
+
+    return jsonify(
+        activos=int(conteo.activos), inactivos=int(conteo.inactivos),
+        altasMes=int(conteo.altas), bajasMes=int(conteo.bajas),
+        conAdeudos=con_adeudos, pendientes=pendientes, porArea=por_area,
+        movimientos=movimientos, recientes=recientes,
+    )

@@ -9,6 +9,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { ActivatedRoute } from '@angular/router';
 import { forkJoin } from 'rxjs';
 import { RhService } from '../rh.service';
+import { AuthService } from '../../auth/auth.service';
 import { Adeudo, Trabajador, Vale } from '../rh.model';
 import { nombreCompleto } from '../rh.utils';
 import { BuscadorTrabajadorComponent } from '../compartidos/buscador-trabajador/buscador-trabajador.component';
@@ -32,8 +33,8 @@ export class ValesComponent implements OnInit {
   generando = signal(false);
   error = signal<string | null>(null);
 
-  /** Usuario de RH que emite el vale. Cuando haya login, saldrá de la sesión. */
-  usuarioActual = 'Recursos Humanos';
+  /** Usuario de RH que emite el vale (sale de la sesión). */
+  usuarioActual = inject(AuthService).usuario()?.nombre ?? 'Recursos Humanos';
 
   tieneAdeudos = computed(() => this.adeudos().length > 0);
   nombreCompleto = nombreCompleto;

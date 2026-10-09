@@ -1,4 +1,6 @@
-import { Component, computed, HostListener, signal } from '@angular/core';
+import { Component, computed, HostListener, inject, signal } from '@angular/core';
+import { AuthService } from '../auth/auth.service';
+import { CerrarSesionComponent } from '../auth/cerrar-sesion/cerrar-sesion.component';
 
 /* ---------- Tipos: describen la forma de los datos ---------- */
 type Categoria = 'epp' | 'manual' | 'electrica' | 'medicion' | 'elevacion';
@@ -20,7 +22,7 @@ interface LineaVale {
 }
 @Component({
   selector: 'app-solicitante.component',
-  imports: [],
+  imports: [CerrarSesionComponent],
   templateUrl: './solicitante.component.html',
   styleUrl: './solicitante.component.css',
 })
@@ -30,7 +32,7 @@ export class SolicitanteComponent {
 
   /* ---------- Datos del trabajador (temporales: luego vendrán de tu sesión o API) ---------- */
   readonly trabajador = {
-    nombre: 'Carlos Mendoza',
+    nombre: inject(AuthService).usuario()?.nombre ?? '',
     nss: '12345678901',
     puesto: 'Técnico mecánico',
   };

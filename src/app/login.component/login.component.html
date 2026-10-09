@@ -30,7 +30,7 @@
           </div>
         </div>
         <!-- Formulario -->
-        <form>
+        <form (submit)="entrar($event)" novalidate>
           <div class="space-y-5">
             <!-- Usuario -->
             <div>
@@ -46,7 +46,10 @@
                 type="text"
                 id="email"
                 name="email"
-                placeholder="Número de Seguridad Social"
+                autocomplete="username"
+                placeholder="Usuario o Número de Seguridad Social"
+                [value]="usuario()"
+                (input)="usuario.set($any($event.target).value)"
                 class="h-12 w-full rounded-xl border border-gray-300 bg-gray-50 px-4 py-2.5 text-sm text-gray-800 placeholder:text-gray-400 shadow-sm outline-none transition duration-200 hover:border-gray-400 focus:border-brand-500 focus:bg-white focus:ring-4 focus:ring-brand-500/20 dark:border-gray-700 dark:bg-gray-800 dark:text-white dark:placeholder:text-white/30 dark:hover:border-gray-600 dark:focus:border-brand-800"
               />
             </div>
@@ -66,7 +69,10 @@
                   type="password"
                   id="password"
                   name="password"
+                  autocomplete="current-password"
                   placeholder="Introduzca su contraseña"
+                  [value]="password()"
+                  (input)="password.set($any($event.target).value)"
                   class="h-12 w-full rounded-xl border border-gray-300 bg-gray-50 py-2.5 pl-4 pr-11 text-sm text-gray-800 placeholder:text-gray-400 shadow-sm outline-none transition duration-200 hover:border-gray-400 focus:border-brand-500 focus:bg-white focus:ring-4 focus:ring-brand-500/20 dark:border-gray-700 dark:bg-gray-800 dark:text-white dark:placeholder:text-white/30 dark:hover:border-gray-600 dark:focus:border-brand-800"
                 />
 
@@ -74,15 +80,22 @@
               </div>
             </div>
 
+            <!-- Error -->
+            @if (error()) {
+              <p role="alert" class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300">
+                {{ error() }}
+              </p>
+            }
+
             <!-- Botón -->
             <div class="pt-2">
-              <a
-              href="/dashboard"
-
+              <button
+                type="submit"
+                [disabled]="cargando()"
                 class="btn btn-info h-12 w-full rounded-xl border-0 text-sm font-semibold shadow-lg shadow-sky-500/30 transition duration-300 hover:-translate-y-0.5 hover:shadow-xl hover:shadow-sky-500/40 active:translate-y-0"
               >
-                Iniciar sesión
-              </a>
+                {{ cargando() ? 'Verificando…' : 'Iniciar sesión' }}
+              </button>
             </div>
           </div>
         </form>

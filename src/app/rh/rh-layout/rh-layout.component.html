@@ -1,25 +1,12 @@
-<!-- Marco del módulo de Recursos Humanos -->
-<section class="min-h-screen bg-slate-100 text-slate-800 print:bg-white">
-  <!-- Barra superior negra con el nombre del módulo -->
-  <header class="bg-slate-900 text-white print:hidden">
-    <div class="mx-auto max-w-6xl px-4 pt-5 md:px-8">
-      <p class="text-xs font-semibold uppercase tracking-widest text-orange-400">IMHOTEP · Control de almacenes</p>
-      <h1 class="mt-1 text-2xl font-bold tracking-tight">Recursos Humanos</h1>
+<!-- Marco del módulo de Recursos Humanos (mismo diseño que el dashboard).
+     claro: las pantallas de RH todavía no tienen modo oscuro. -->
+<app-panel-layout modulo="rh" titulo="Recursos Humanos" [menu]="menu" etiqueta="Recursos Humanos" [claro]="true">
+  <div encabezado class="min-w-0">
+    <p class="truncate text-sm font-semibold text-gray-900">Recursos Humanos</p>
+    <p class="truncate text-xs text-gray-500">IMHOTEP · Control de almacenes</p>
+  </div>
 
-      <!-- Pestañas. routerLinkActive pone las clases cuando la ruta está activa -->
-      <nav class="-mb-px mt-4 flex gap-1 overflow-x-auto">
-        @for (p of pestanas; track p.ruta) {
-          <a [routerLink]="p.ruta"
-            routerLinkActive="!bg-slate-100 !text-slate-900"
-            class="whitespace-nowrap rounded-t-xl px-5 py-2.5 text-sm font-semibold text-slate-300 transition hover:text-white">
-            {{ p.texto }}
-          </a>
-        }
-      </nav>
-    </div>
-  </header>
-
-  <main class="mx-auto max-w-6xl px-4 py-6 md:px-8 md:py-8 print:p-0">
+  <div class="mx-auto max-w-6xl text-slate-800">
     <router-outlet />
-  </main>
-</section>
+  </div>
+</app-panel-layout>

@@ -1,0 +1,92 @@
+<!-- =====================================================
+     CÁMARA EN VIVO
+     Celular: pantalla completa, botón grande abajo (al alcance del pulgar).
+     Computadora: ventana centrada.
+====================================================== -->
+<div class="fixed inset-0 z-[70] flex items-center justify-center bg-black sm:bg-black/70 sm:p-6" role="dialog" aria-modal="true" aria-label="Cámara">
+  <div class="relative flex size-full flex-col overflow-hidden bg-black sm:h-auto sm:max-h-full sm:max-w-3xl sm:rounded-2xl">
+    <!-- Barra superior -->
+    <div class="absolute inset-x-0 top-0 z-10 flex items-center justify-between gap-3 bg-gradient-to-b from-black/70 to-transparent p-3 text-white">
+      <button
+        type="button"
+        (click)="cerrar.emit()"
+        aria-label="Cerrar cámara"
+        class="inline-flex size-11 items-center justify-center rounded-full bg-black/40 hover:bg-black/60"
+      >
+        <svg class="size-6" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </button>
+      @if (tomadas()) {
+        <span class="rounded-full bg-emerald-600 px-3 py-1 text-sm font-semibold">
+          {{ tomadas() }} {{ tomadas() === 1 ? 'foto tomada' : 'fotos tomadas' }}
+        </span>
+      }
+    </div>
+
+    <!-- Video (siempre en el DOM para poder conectarle la cámara) -->
+    <div class="relative flex min-h-0 flex-1 items-center justify-center">
+      <video
+        #video
+        playsinline
+        muted
+        autoplay
+        class="size-full object-cover sm:aspect-[4/3] sm:h-auto sm:object-contain"
+        [class.invisible]="estado() !== 'lista'"
+      ></video>
+
+      @if (destello()) {
+        <div class="pointer-events-none absolute inset-0 bg-white/80"></div>
+      }
+
+      @if (estado() === 'iniciando') {
+        <p class="absolute text-sm text-white/80">Encendiendo la cámara…</p>
+      }
+
+      @if (estado() === 'error') {
+        <div class="absolute inset-x-6 mx-auto max-w-sm rounded-2xl bg-white p-5 text-center text-gray-900">
+          <p class="text-sm">{{ error() }}</p>
+          <div class="mt-4 flex flex-col gap-2">
+            <button type="button" (click)="reintentar()" class="h-11 rounded-xl bg-blue-600 text-sm font-semibold text-white hover:bg-blue-700">
+              Volver a intentar
+            </button>
+            <!-- capture: en celular abre directo la app de cámara del sistema -->
+            <label class="flex h-11 cursor-pointer items-center justify-center rounded-xl border border-gray-300 text-sm font-semibold hover:bg-gray-50">
+              Usar la cámara del sistema o una foto
+              <input type="file" accept="image/*" capture="environment" class="sr-only" (change)="elegirArchivo($event)" />
+            </label>
+          </div>
+        </div>
+      }
+    </div>
+
+    <!-- Controles -->
+    @if (estado() === 'lista') {
+      <div class="grid grid-cols-3 items-center bg-black px-6 pt-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] text-white">
+        <span class="text-xs text-white/60">Quedan {{ limite - tomadas() }}</span>
+        <button
+          type="button"
+          (click)="tomar()"
+          aria-label="Tomar foto"
+          class="mx-auto inline-flex size-[72px] items-center justify-center rounded-full border-4 border-white transition active:scale-95"
+        >
+          <span class="size-14 rounded-full bg-white"></span>
+        </button>
+        @if (variasCamaras()) {
+          <button
+            type="button"
+            (click)="cambiarCamara()"
+            aria-label="Cambiar de cámara"
+            class="ml-auto inline-flex size-11 items-center justify-center rounded-full bg-white/15 hover:bg-white/25"
+          >
+            <svg class="size-6" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
+            </svg>
+          </button>
+        } @else {
+          <span></span>
+        }
+      </div>
+    }
+  </div>
+</div>

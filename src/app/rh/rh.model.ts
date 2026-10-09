@@ -115,3 +115,21 @@ export interface RespuestaBaja {
   mensaje: string;
   adeudos?: Adeudo[];
 }
+
+/** Números del tablero de RH (GET /api/rh/resumen). */
+export interface ResumenRh {
+  activos: number;
+  inactivos: number;
+  altasMes: number;            // ingresaron en los últimos 30 días
+  bajasMes: number;            // se dieron de baja en los últimos 30 días
+  /** Trabajadores que deben equipo (activos o ya dados de baja). */
+  conAdeudos: { trabajador: Trabajador; articulos: number; diasMayor: number }[];
+  /** Trabajadores activos con papeles o inducción pendientes. */
+  pendientes: { trabajador: Trabajador; faltan: string[] }[];
+  /** Personal activo por área, de mayor a menor. */
+  porArea: { area: string; total: number }[];
+  /** Últimos movimientos de almacén de cualquier trabajador. */
+  movimientos: (Movimiento & { trabajadorId: number; trabajador: string })[];
+  /** Últimas altas y bajas. */
+  recientes: { trabajador: Trabajador; tipo: 'alta' | 'baja'; fecha: string; detalle: string }[];
+}

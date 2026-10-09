@@ -3,7 +3,16 @@
 // Funciones pequeñas que usan varias pantallas. Al tenerlas aquí no se
 // repiten en cada componente.
 // =====================================================================
-import { TipoMovimiento, Trabajador } from './rh.model';
+import { DocumentosTrabajador, TipoMovimiento, Trabajador } from './rh.model';
+
+/** Nombre de cada documento del expediente. */
+export const TEXTO_DOCUMENTO: Record<keyof DocumentosTrabajador, string> = {
+  identificacion: 'Identificación oficial',
+  comprobanteDomicilio: 'Comprobante de domicilio',
+  datosBancarios: 'Datos bancarios',
+  contratoFirmado: 'Contrato firmado',
+  altaImss: 'Alta en el IMSS',
+};
 
 /** "Juan" + "Pérez" + "García" -> "Juan Pérez García". */
 export function nombreCompleto(t: Trabajador): string {

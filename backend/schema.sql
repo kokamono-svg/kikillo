@@ -16,7 +16,8 @@ CREATE TABLE articulos (
   clave       VARCHAR(30)  NOT NULL UNIQUE,
   descripcion VARCHAR(120) NOT NULL,
   tipo        ENUM('EPP','Herramienta','Equipo','Consumible') NOT NULL,
-  por_pieza   BOOLEAN NOT NULL DEFAULT FALSE     -- TRUE = cada pieza lleva ID propio (arnés, bandola...)
+  por_pieza   BOOLEAN NOT NULL DEFAULT FALSE,    -- TRUE = cada pieza lleva ID propio (arnés, bandola...)
+  costoso     BOOLEAN NOT NULL DEFAULT FALSE     -- equipo de alto valor: al devolverlo se sugieren notas y fotos
 ) DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
 
 CREATE TABLE trabajadores (
@@ -84,10 +85,40 @@ CREATE TABLE movimientos (
   id_serie       VARCHAR(30) NULL,
   cantidad       INT NOT NULL CHECK (cantidad > 0),
   responsable    VARCHAR(80) NOT NULL,
+  notas          VARCHAR(500) NULL,               -- opcional, al recibir: cómo llegó el equipo
   fecha          DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (trabajador_id) REFERENCES trabajadores(id),
   FOREIGN KEY (articulo_id) REFERENCES articulos(id),
   FOREIGN KEY (almacen_id) REFERENCES almacenes(id),
   FOREIGN KEY (vale_id) REFERENCES vales(id),
   INDEX idx_mov_trabajador (trabajador_id, fecha)   -- acelera kardex y adeudos con cientos de miles de registros
+) DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+
+-- Fotos opcionales de una devolución (movimiento DEVOLUCION o DANO).
+-- Se guarda solo la ruta del archivo en el servidor, NUNCA la imagen en la BD.
+CREATE TABLE movimiento_fotos (
+  id             INT AUTO_INCREMENT PRIMARY KEY,
+  movimiento_id  INT NOT NULL,
+  ruta           VARCHAR(255) NOT NULL,
+  creado_en      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (movimiento_id) REFERENCES movimientos(id)
+) DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+
+-- Usuarios que pueden iniciar sesión. La contraseña se guarda como hash,
+-- nunca en texto plano. Para crear uno, desde la carpeta backend:
+--   python -c "from werkzeug.security import generate_password_hash as g; print(g('LaContraseña'))"
+-- y luego:
+--   INSERT INTO usuarios (usuario, password_hash, nombre, rol) VALUES ('rh', '<hash>', 'Recursos Humanos', 'rh');
+CREATE TABLE usuarios (
+  id             INT AUTO_INCREMENT PRIMARY KEY,
+  usuario        VARCHAR(40)  NOT NULL UNIQUE,     -- para trabajadores, su NSS
+  password_hash  VARCHAR(255) NOT NULL,
+  nombre         VARCHAR(80)  NOT NULL,
+  rol            ENUM('admin','rh','almacenista','comprador','solicitante') NOT NULL,
+  trabajador_id  INT NULL,                         -- solo para rol solicitante
+  almacen_id     INT NULL,                         -- solo para rol almacenista: el único almacén que ve y presta
+  activo         BOOLEAN NOT NULL DEFAULT TRUE,
+  creado_en      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (trabajador_id) REFERENCES trabajadores(id),
+  FOREIGN KEY (almacen_id) REFERENCES almacenes(id)
 ) DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;

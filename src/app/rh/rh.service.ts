@@ -11,10 +11,10 @@ import { HttpClient, HttpErrorResponse, HttpParams } from '@angular/common/http'
 import { Observable, of, throwError, timer } from 'rxjs';
 import { delay, switchMap } from 'rxjs/operators';
 import {
-  Adeudo, Movimiento, NuevoTrabajador, RespuestaBaja, SolicitudBaja,
+  Adeudo, DocumentosTrabajador, Movimiento, NuevoTrabajador, ResumenRh, RespuestaBaja, SolicitudBaja,
   TipoArticulo, TipoMovimiento, Trabajador, Vale,
 } from './rh.model';
-import { normalizar } from './rh.utils';
+import { TEXTO_DOCUMENTO, diasDesde, hoyIso, nombreCompleto, normalizar } from './rh.utils';
 
 @Injectable({ providedIn: 'root' })
 export class RhService {
@@ -25,6 +25,16 @@ export class RhService {
 
   /** true = datos falsos en memoria; false = llama a Flask de verdad. */
   private usarDatosDePrueba = true;
+
+  // ------------------------------------------------------------------
+  // TABLERO
+  // ------------------------------------------------------------------
+
+  /** Números para el tablero de RH: personal, adeudos, pendientes y movimientos. */
+  obtenerResumen(): Observable<ResumenRh> {
+    if (this.usarDatosDePrueba) return simular(calcularResumen(), 400);
+    return this.http.get<ResumenRh>(`${this.apiUrl}/resumen`);
+  }
 
   // ------------------------------------------------------------------
   // TRABAJADORES
@@ -246,6 +256,71 @@ function armarVales(trabajadorId: number): Vale[] {
   return [...entregas, ...adeudos].sort((a, b) => b.fecha.localeCompare(a.fecha));
 }
 
+/** Fecha de hace n días como "AAAA-MM-DD". */
+function haceDias(n: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/** Arma el tablero con la "base de datos" en memoria (lo mismo que haría GET /api/rh/resumen). */
+function calcularResumen(): ResumenRh {
+  const hace30 = haceDias(30);
+  const activos = BD.trabajadores.filter((t) => t.activo);
+  const inactivos = BD.trabajadores.filter((t) => !t.activo);
+
+  const conAdeudos = BD.trabajadores
+    .map((t) => ({ t, adeudos: calcularAdeudos(t.id) }))
+    .filter((x) => x.adeudos.length > 0)
+    .map(({ t, adeudos }) => ({
+      trabajador: { ...t },
+      articulos: adeudos.reduce((s, a) => s + a.cantidadPendiente, 0),
+      diasMayor: Math.max(...adeudos.map((a) => diasDesde(a.fechaEntrega))),
+    }))
+    .sort((a, b) => b.diasMayor - a.diasMayor);
+
+  const pendientes = activos
+    .map((t) => {
+      const faltan = (Object.keys(TEXTO_DOCUMENTO) as (keyof DocumentosTrabajador)[])
+        .filter((k) => !t.documentos[k])
+        .map((k) => TEXTO_DOCUMENTO[k]);
+      if (!t.induccionSeguridad) faltan.push('Inducción de seguridad');
+      return { trabajador: { ...t }, faltan };
+    })
+    .filter((p) => p.faltan.length > 0);
+
+  const areas = new Map<string, number>();
+  for (const t of activos) areas.set(t.area, (areas.get(t.area) ?? 0) + 1);
+
+  const nombres = new Map(BD.trabajadores.map((t) => [t.id, nombreCompleto(t)]));
+  const movimientos = [...BD.movimientos]
+    .sort((a, b) => b.fecha.localeCompare(a.fecha) || b.id - a.id)
+    .slice(0, 8)
+    .map((m) => ({ ...aMovimiento(m), trabajadorId: m.trabajadorId, trabajador: nombres.get(m.trabajadorId) ?? '' }));
+
+  const recientes = [
+    ...BD.trabajadores.map((t) => ({ trabajador: { ...t }, tipo: 'alta' as const, fecha: t.fechaIngreso, detalle: t.puesto })),
+    ...inactivos
+      .filter((t) => t.fechaBaja)
+      .map((t) => ({ trabajador: { ...t }, tipo: 'baja' as const, fecha: t.fechaBaja!, detalle: t.motivoBaja ?? '' })),
+  ]
+    .filter((r) => r.fecha <= hoyIso())
+    .sort((a, b) => b.fecha.localeCompare(a.fecha))
+    .slice(0, 6);
+
+  return {
+    activos: activos.length,
+    inactivos: inactivos.length,
+    altasMes: activos.filter((t) => t.fechaIngreso >= hace30).length,
+    bajasMes: inactivos.filter((t) => (t.fechaBaja ?? '') >= hace30).length,
+    conAdeudos,
+    pendientes,
+    porArea: [...areas.entries()].map(([area, total]) => ({ area, total })).sort((a, b) => b.total - a.total),
+    movimientos,
+    recientes,
+  };
+}
+
 const DOCS_COMPLETOS = { identificacion: true, comprobanteDomicilio: true, datosBancarios: true, contratoFirmado: true, altaImss: true };
 
 /** "Base de datos" en memoria. Se reinicia al recargar la página. */
@@ -291,6 +366,43 @@ const BD = {
       fechaIngreso: '2025-01-20', tallaRopa: 'L', tallaCalzado: '28', documentos: DOCS_COMPLETOS,
       induccionSeguridad: true, activo: false, fechaBaja: '2026-06-30', motivoBaja: 'Término de contrato',
     },
+    {
+      id: 4, numeroEmpleado: 'IMH-00004', nombres: 'Luis Alberto', apellidoPaterno: 'Hernández', apellidoMaterno: 'Mora',
+      curp: 'HEML980214HJCRRS04', rfc: 'HEML980214AB4', nss: '23456789012', telefono: '3311223344',
+      puesto: 'Pailero', area: 'Pailería', contrato: 'LC-2026-007', supervisor: 'J. Torres',
+      fechaIngreso: '2026-10-01', tallaRopa: 'L', tallaCalzado: '27',
+      documentos: { ...DOCS_COMPLETOS, contratoFirmado: false, altaImss: false },
+      induccionSeguridad: false, activo: true, fechaBaja: null, motivoBaja: null,
+    },
+    {
+      id: 5, numeroEmpleado: 'IMH-00005', nombres: 'Ana Sofía', apellidoPaterno: 'Torres', apellidoMaterno: 'Vega',
+      curp: 'TOVA990505MJCRGN05', rfc: 'TOVA990505CD5', nss: '34567890123', telefono: '3322334455',
+      puesto: 'Técnica en alturas', area: 'Mantenimiento', contrato: 'LC-2026-006', supervisor: 'R. Martínez',
+      fechaIngreso: '2026-09-22', tallaRopa: 'S', tallaCalzado: '23', documentos: DOCS_COMPLETOS,
+      induccionSeguridad: true, activo: true, fechaBaja: null, motivoBaja: null,
+    },
+    {
+      id: 6, numeroEmpleado: 'IMH-00006', nombres: 'Roberto', apellidoPaterno: 'Vega', apellidoMaterno: 'Lara',
+      curp: 'VELR850909HJCGRB06', rfc: 'VELR850909EF6', nss: '45678901234', telefono: '3333445566',
+      puesto: 'Electricista', area: 'Eléctrico', contrato: 'LC-2026-002', supervisor: 'J. Torres',
+      fechaIngreso: '2026-07-14', tallaRopa: 'XL', tallaCalzado: '29',
+      documentos: { ...DOCS_COMPLETOS, datosBancarios: false },
+      induccionSeguridad: true, activo: true, fechaBaja: null, motivoBaja: null,
+    },
+    {
+      id: 7, numeroEmpleado: 'IMH-00007', nombres: 'Pedro', apellidoPaterno: 'Núñez', apellidoMaterno: 'Salas',
+      curp: 'NUSP900303HJCXLD07', rfc: 'NUSP900303GH7', nss: '56789012345', telefono: '3344556677',
+      puesto: 'Ayudante general', area: 'Almacén', contrato: 'LC-2026-003', supervisor: 'J. Torres',
+      fechaIngreso: '2026-03-02', tallaRopa: 'M', tallaCalzado: '26', documentos: DOCS_COMPLETOS,
+      induccionSeguridad: true, activo: false, fechaBaja: '2026-10-03', motivoBaja: 'Renuncia voluntaria',
+    },
+    {
+      id: 8, numeroEmpleado: 'IMH-00008', nombres: 'Laura', apellidoPaterno: 'Ríos', apellidoMaterno: 'Medina',
+      curp: 'RIML920618MJCSDR08', rfc: 'RIML920618IJ8', nss: '67890123456', telefono: '3355667788',
+      puesto: 'Supervisora de seguridad', area: 'Mantenimiento', contrato: 'LC-2026-005', supervisor: 'R. Martínez',
+      fechaIngreso: '2026-05-18', tallaRopa: 'M', tallaCalzado: '24', documentos: DOCS_COMPLETOS,
+      induccionSeguridad: true, activo: true, fechaBaja: null, motivoBaja: null,
+    },
   ] as Trabajador[],
 
   movimientos: [
@@ -310,6 +422,16 @@ const BD = {
     { id: 12, trabajadorId: 2, fecha: '2026-08-04T09:00:00', tipo: 'ENTREGA', clave: 'GUA-CAR', idSerie: null, cantidad: 3, almacen: 'Midrex', folioVale: '0002', responsable: 'Ana López' },
     { id: 13, trabajadorId: 2, fecha: '2026-09-30T15:20:00', tipo: 'DEVOLUCION', clave: 'ARN-POL', idSerie: 'ALT-024', cantidad: 1, almacen: 'Midrex', folioVale: null, responsable: 'Ana López' },
     { id: 14, trabajadorId: 2, fecha: '2026-09-30T15:20:00', tipo: 'DEVOLUCION', clave: 'MAR-BOL', idSerie: null, cantidad: 1, almacen: 'Midrex', folioVale: null, responsable: 'Ana López' },
+    // Ana Sofía: debe un arnés.
+    { id: 15, trabajadorId: 5, fecha: '2026-09-23T07:50:00', tipo: 'ENTREGA', clave: 'ARN-POL', idSerie: 'ALT-055', cantidad: 1, almacen: 'Central Kepler', folioVale: '0003', responsable: 'Oscar Salas' },
+    { id: 16, trabajadorId: 5, fecha: '2026-09-23T07:50:00', tipo: 'ENTREGA', clave: 'DIS-9', idSerie: null, cantidad: 3, almacen: 'Central Kepler', folioVale: '0003', responsable: 'Oscar Salas' },
+    // Roberto: devolvió el reflector, debe la extensión.
+    { id: 17, trabajadorId: 6, fecha: '2026-08-10T08:15:00', tipo: 'ENTREGA', clave: 'EXT-ELE', idSerie: null, cantidad: 1, almacen: 'HYL', folioVale: '0004', responsable: 'Ana López' },
+    { id: 18, trabajadorId: 6, fecha: '2026-08-10T08:15:00', tipo: 'ENTREGA', clave: 'REF-LAM', idSerie: null, cantidad: 1, almacen: 'HYL', folioVale: '0004', responsable: 'Ana López' },
+    { id: 19, trabajadorId: 6, fecha: '2026-09-01T17:30:00', tipo: 'DEVOLUCION', clave: 'REF-LAM', idSerie: null, cantidad: 1, almacen: 'HYL', folioVale: null, responsable: 'Ana López' },
+    // Laura: todo devuelto.
+    { id: 20, trabajadorId: 8, fecha: '2026-10-06T09:10:00', tipo: 'ENTREGA', clave: 'FLX-001', idSerie: null, cantidad: 1, almacen: 'Midrex', folioVale: '0005', responsable: 'Ana López' },
+    { id: 21, trabajadorId: 8, fecha: '2026-10-07T14:00:00', tipo: 'DEVOLUCION', clave: 'FLX-001', idSerie: null, cantidad: 1, almacen: 'Midrex', folioVale: null, responsable: 'Ana López' },
   ] as MovimientoBD[],
 
   valesAdeudo: [] as Vale[],

@@ -463,7 +463,7 @@
           <!-- Página activa -->
           <li>
             <a
-              href="/dashboard"
+              routerLink="/dashboard"
               aria-current="page"
               class="relative flex items-center gap-3 rounded-xl bg-white/10 px-4 py-3 text-sm font-medium text-white"
             >
@@ -495,7 +495,7 @@
           </li>
 
           <li>
-            <a href="almacenista" class="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition hover:bg-white/5 hover:text-white">
+            <a routerLink="/almacen" class="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition hover:bg-white/5 hover:text-white">
               <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />
               </svg>
@@ -505,7 +505,7 @@
 
 
            <li>
-            <a href="rh" class="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition hover:bg-white/5 hover:text-white">
+            <a routerLink="/rh" class="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition hover:bg-white/5 hover:text-white">
               <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />
               </svg>
@@ -531,20 +531,21 @@
             <img src="./images/user/owner.png" alt="Usuario" class="size-full object-cover" />
           </div>
           <div class="min-w-0">
-            <p class="truncate text-sm font-medium text-white">Administrador</p>
+            <p class="truncate text-sm font-medium text-white">{{ auth.usuario()?.nombre }}</p>
             <p class="truncate text-xs text-gray-400">Almacén central</p>
           </div>
         </div>
 
-        <a
-          href=""
+        <button
+          type="button"
+          (click)="auth.cerrarSesion()"
           class="mt-4 flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-orange-400/30 text-sm font-medium text-orange-300 transition hover:bg-orange-400/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-300"
         >
           <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
           </svg>
           Cerrar sesión
-        </a>
+        </button>
       </div>
     </aside>
   </div>

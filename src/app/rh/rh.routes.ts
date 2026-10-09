@@ -9,9 +9,9 @@ import { RhLayoutComponent } from './rh-layout/rh-layout.component';
 export const RH_ROUTES: Routes = [
   {
     path: '',
-    component: RhLayoutComponent, // el marco con pestañas
+    component: RhLayoutComponent, // el marco con menú lateral
     children: [
-      { path: '', redirectTo: 'alta', pathMatch: 'full' },
+      { path: '', pathMatch: 'full', title: 'RH · Resumen', loadComponent: () => import('./resumen/resumen-rh.component').then((m) => m.ResumenRhComponent) },
       { path: 'alta', title: 'RH · Alta', loadComponent: () => import('./alta/alta-trabajador.component').then((m) => m.AltaTrabajadorComponent) },
       { path: 'baja', title: 'RH · Baja', loadComponent: () => import('./baja/baja-trabajador.component').then((m) => m.BajaTrabajadorComponent) },
       { path: 'vales', title: 'RH · Vales', loadComponent: () => import('./vales/vales.component').then((m) => m.ValesComponent) },

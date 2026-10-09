@@ -1,11 +1,18 @@
-import { Component, computed, inject, signal, viewChild, ElementRef } from '@angular/core';
+import { Component, computed, effect, inject, signal, untracked, viewChild, ElementRef } from '@angular/core';
 import { DatePipe } from '@angular/common';
+import { RouterLink } from '@angular/router';
 import { AlmacenService } from './almacen.service';
 import { Articulo, LineaVale, Vale } from './almacen.models';
 import { FirmaPad } from './firma-pad/firma-pad';
+import { AuthService } from '../auth/auth.service';
+import { AccesoAlmacen } from './acceso-almacen.service';
+import { ValeImpresoComponent } from './vale-impreso/vale-impreso.component';
+import { CLASE_TIPO } from './estado-prestamo';
 
 /* =====================================================
-   PANTALLA DEL ALMACENISTA
+   NUEVO PRÉSTAMO (admin y almacenista; compras no presta)
+   El equipo sale del almacén elegido arriba (el almacenista
+   siempre usa el suyo).
    Flujo en 4 pasos:
      1. Equipo   → buscar o escanear lo que pide el trabajador
      2. Empleado → nombre, número, actividad, motivo y fecha de entrega
@@ -18,24 +25,21 @@ const PIN_SUPERVISOR = '1234';
 
 @Component({
   selector: 'app-almacenista',
-  imports: [FirmaPad, DatePipe],
+  imports: [FirmaPad, DatePipe, RouterLink, ValeImpresoComponent],
   templateUrl: './almacenista.component.html',
   styleUrl: './almacenista.component.css',
 })
 export class AlmacenistaComponent {
   /* inject() pide a Angular la instancia del servicio (la misma para toda la app) */
   readonly almacen = inject(AlmacenService);
+  readonly acceso = inject(AccesoAlmacen);
+  readonly claseTipo = CLASE_TIPO;
 
-  /* ---------- Datos fijos de la demo (luego vendrán del login) ---------- */
-  readonly almacenista = 'Oscar Salas';
-  readonly almacenes = [
-    'Colonia de Contratistas (Mittal)',
-    'Central Kepler',
-    'Área Midrex',
-    'Área HYL',
-    'Área Laminador',
-    'Área Minas',
-  ];
+  /* ---------- Datos de la sesión ---------- */
+  readonly almacenista = inject(AuthService).usuario()?.nombre ?? '';
+
+  /** Almacén del que sale el equipo ('' = falta elegirlo). */
+  readonly almacenElegido = this.acceso.actual;
   readonly pasos = ['Equipo', 'Empleado', 'Firma', 'Vale'];
 
   /** Fecha de hoy en formato AAAA-MM-DD (para el mínimo del calendario). */
@@ -43,7 +47,6 @@ export class AlmacenistaComponent {
 
   /* ---------- Estado de la pantalla (signals) ---------- */
   readonly paso = signal(1);
-  readonly vista = signal<'nuevo' | 'historial'>('nuevo');
 
   // Paso 1: equipo
   readonly busqueda = signal('');
@@ -59,7 +62,6 @@ export class AlmacenistaComponent {
   readonly autorizados = signal<string[]>([]);
 
   // Paso 2: empleado
-  readonly almacenElegido = signal(this.almacenes[0]);
   readonly nombre = signal('');
   readonly numeroEmpleado = signal('');
   readonly actividad = signal('');
@@ -77,13 +79,28 @@ export class AlmacenistaComponent {
 
   readonly inputEscaner =
   viewChild<ElementRef<HTMLInputElement>>('inputEscaner');
+
+  constructor() {
+    // Si cambian de almacén a medio vale, el carrito ya no corresponde: se empieza de nuevo
+    effect(() => {
+      this.almacenElegido();
+      untracked(() => {
+        if (this.paso() === 4) return; // el vale ya emitido se queda en pantalla
+        this.carrito.set([]);
+        this.autorizados.set([]);
+        this.autorizoSupervisor.set('');
+        this.paso.set(1);
+      });
+    });
+  }
+
   /* ---------- Valores calculados ---------- */
 
   /** Catálogo filtrado por el buscador (ignora acentos y mayúsculas). */
   readonly filtrados = computed(() => {
     const t = this.normalizar(this.busqueda());
     return this.almacen
-      .catalogo()
+      .catalogoDe(this.almacenElegido())
       .filter((a) => this.normalizar(a.nombre).includes(t) || a.codigo.toLowerCase().includes(t));
   });
 
@@ -187,7 +204,7 @@ export class AlmacenistaComponent {
    const codigo = this.codigoEscaneado().trim().toUpperCase().replace(/'/g, '-');
     this.codigoEscaneado.set('');
     if (!codigo) return;
-    const a = this.almacen.buscarPorCodigo(codigo);
+    const a = this.almacen.buscarPorCodigo(this.almacenElegido(), codigo);
     if (!a) {
       this.avisar(`El código ${codigo} no existe en el catálogo.`, 'alerta');
       return;
@@ -202,7 +219,7 @@ export class AlmacenistaComponent {
   /** Suma o resta 1 a un renglón (solo artículos por cantidad). */
   cambiarCantidad(linea: LineaVale, cambio: number): void {
     if (cambio > 0) {
-      const a = this.almacen.catalogo().find((x) => x.codigo === linea.codigo);
+      const a = this.almacen.catalogoDe(this.almacenElegido()).find((x) => x.codigo === linea.codigo);
       if (a) this.agregar(a);
       return;
     }
@@ -297,15 +314,7 @@ export class AlmacenistaComponent {
     this.autorizoSupervisor.set('');
     this.supervisorNombre.set('');
     this.valeActual.set(null);
-    this.vista.set('nuevo');
     this.paso.set(1);
-  }
-
-  /** Abre un vale ya emitido desde el historial. */
-  verVale(v: Vale): void {
-    this.valeActual.set(v);
-    this.vista.set('nuevo');
-    this.paso.set(4);
   }
 
   /** Abre el diálogo de impresión del navegador (desde ahí se puede "Guardar como PDF"). */
