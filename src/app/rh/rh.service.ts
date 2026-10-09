@@ -14,6 +14,7 @@ import {
   Adeudo, Movimiento, NuevoTrabajador, RespuestaBaja, SolicitudBaja,
   TipoArticulo, TipoMovimiento, Trabajador, Vale,
 } from './rh.model';
+import { normalizar } from './rh.utils';
 
 @Injectable({ providedIn: 'root' })
 export class RhService {
@@ -32,10 +33,10 @@ export class RhService {
   /** Busca por número de empleado, nombre o CURP. */
   buscarTrabajadores(termino: string): Observable<Trabajador[]> {
     if (this.usarDatosDePrueba) {
-      const t = termino.trim().toLowerCase();
+      // normalizar(): sin acentos y en minúsculas, igual que la collation de MySQL
+      const t = normalizar(termino.trim());
       const r = BD.trabajadores.filter((x) =>
-        [x.numeroEmpleado, x.nombres, x.apellidoPaterno, x.apellidoMaterno, x.curp]
-          .join(' ').toLowerCase().includes(t)
+        normalizar([x.numeroEmpleado, x.nombres, x.apellidoPaterno, x.apellidoMaterno, x.curp].join(' ')).includes(t)
       );
       return simular(r);
     }

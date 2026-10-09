@@ -2,12 +2,14 @@
 -- schema.sql  (MySQL / MariaDB)
 -- Tablas que usa el módulo de RH. Es una propuesta: ajústenla al
 -- esquema que ya tenga el equipo.
+-- utf8mb4_unicode_ci: las búsquedas con LIKE ignoran acentos y
+-- mayúsculas ("perez" encuentra a "Pérez").
 -- =====================================================================
 
 CREATE TABLE almacenes (
   id      INT AUTO_INCREMENT PRIMARY KEY,
   nombre  VARCHAR(80) NOT NULL UNIQUE          -- Kepler, Contratistas (Mittal), Midrex, HYL...
-);
+) DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
 
 CREATE TABLE articulos (
   id          INT AUTO_INCREMENT PRIMARY KEY,
@@ -15,7 +17,7 @@ CREATE TABLE articulos (
   descripcion VARCHAR(120) NOT NULL,
   tipo        ENUM('EPP','Herramienta','Equipo','Consumible') NOT NULL,
   por_pieza   BOOLEAN NOT NULL DEFAULT FALSE     -- TRUE = cada pieza lleva ID propio (arnés, bandola...)
-);
+) DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
 
 CREATE TABLE trabajadores (
   id                    INT AUTO_INCREMENT PRIMARY KEY,
@@ -45,7 +47,7 @@ CREATE TABLE trabajadores (
   motivo_baja           VARCHAR(60) NULL,
   comentarios_baja      VARCHAR(500) NULL,
   creado_en             TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
+) DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
 
 -- Encabezado de cada vale (de entrega o de adeudos)
 CREATE TABLE vales (
@@ -57,7 +59,7 @@ CREATE TABLE vales (
   responsable    VARCHAR(80) NOT NULL,
   observaciones  VARCHAR(255),
   FOREIGN KEY (trabajador_id) REFERENCES trabajadores(id)
-);
+) DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
 
 -- Renglones congelados del vale de adeudos (una "foto" de lo que debía ese día)
 CREATE TABLE vale_renglones (
@@ -69,7 +71,7 @@ CREATE TABLE vale_renglones (
   estado        VARCHAR(40) NOT NULL,
   FOREIGN KEY (vale_id) REFERENCES vales(id),
   FOREIGN KEY (articulo_id) REFERENCES articulos(id)
-);
+) DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
 
 -- Cada entrada o salida de un artículo: es la fuente del kardex y de los adeudos
 CREATE TABLE movimientos (
@@ -88,4 +90,4 @@ CREATE TABLE movimientos (
   FOREIGN KEY (almacen_id) REFERENCES almacenes(id),
   FOREIGN KEY (vale_id) REFERENCES vales(id),
   INDEX idx_mov_trabajador (trabajador_id, fecha)   -- acelera kardex y adeudos con cientos de miles de registros
-);
+) DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;

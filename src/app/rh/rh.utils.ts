@@ -15,6 +15,15 @@ export function iniciales(t: Trabajador): string {
   return ((t.nombres[0] ?? '') + (t.apellidoPaterno[0] ?? '')).toUpperCase();
 }
 
+/**
+ * Texto listo para comparar en búsquedas: sin acentos y en minúsculas.
+ * normalize('NFD') separa "é" en "e" + acento, y el replace quita los acentos.
+ * Así "PEREZ", "pérez" y "Pérez" quedan iguales.
+ */
+export function normalizar(texto: string): string {
+  return texto.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+}
+
 /** Días que han pasado desde una fecha ISO hasta hoy. */
 export function diasDesde(fechaIso: string): number {
   const ms = Date.now() - new Date(fechaIso).getTime();
