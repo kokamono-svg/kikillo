@@ -1,0 +1,190 @@
+<!-- Pantalla de ALTA de trabajadores -->
+<div class="space-y-6">
+  <div>
+    <h2 class="text-xl font-bold text-slate-900">Alta de trabajador</h2>
+    <p class="mt-1 text-sm text-slate-500">El número de empleado se genera automáticamente al guardar.</p>
+  </div>
+
+  @if (creado(); as t) {
+    <!-- ===== RESULTADO: trabajador registrado ===== -->
+    <div class="rounded-2xl border border-emerald-200 bg-white p-6 shadow-sm md:p-8">
+      <div class="flex flex-col items-center text-center">
+        <span class="flex size-14 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
+          <svg class="size-8" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>
+        </span>
+        <h3 class="mt-4 text-lg font-semibold text-slate-900">Trabajador registrado</h3>
+        <p class="mt-1 text-sm text-slate-500">{{ nombreCompleto(t) }}</p>
+        <p class="mt-5 text-xs font-semibold uppercase tracking-wide text-slate-500">Número de empleado asignado</p>
+        <p class="mt-1 rounded-xl bg-slate-900 px-6 py-3 font-mono text-2xl font-bold tracking-wider text-white">{{ t.numeroEmpleado }}</p>
+
+        @if (!t.induccionSeguridad) {
+          <p class="mt-5 max-w-md rounded-lg bg-orange-50 px-4 py-2 text-sm text-orange-700 ring-1 ring-orange-600/20">
+            Falta la inducción de seguridad: el almacén no podrá entregarle EPP hasta que se registre.
+          </p>
+        }
+
+        <div class="mt-6 flex flex-col gap-3 sm:flex-row">
+          <button type="button" (click)="nuevoRegistro()"
+            class="rounded-xl bg-blue-700 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-800">Registrar otro</button>
+          <a routerLink="../kardex" [queryParams]="{ trabajador: t.id }"
+            class="rounded-xl px-5 py-2.5 text-sm font-semibold text-slate-700 ring-1 ring-slate-300 hover:bg-slate-50">Ver su kardex</a>
+        </div>
+      </div>
+    </div>
+  } @else {
+    <!-- ===== FORMULARIO ===== -->
+    <form [formGroup]="form" (ngSubmit)="guardar()" class="space-y-6" novalidate>
+
+      @if (error()) {
+        <div role="alert" class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{{ error() }}</div>
+      }
+
+      <!-- 1. Datos personales -->
+      <fieldset class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm md:p-6">
+        <legend class="sr-only">Datos personales</legend>
+        <h3 class="text-sm font-semibold uppercase tracking-wide text-slate-500">Datos personales</h3>
+        <div class="mt-4 grid grid-cols-1 gap-4 md:grid-cols-3">
+          <label class="block">
+            <span class="mb-1.5 block text-sm font-medium text-slate-700">Nombre(s) <span class="text-red-600">*</span></span>
+            <input formControlName="nombres" class="w-full rounded-xl border bg-white px-3.5 py-2.5 text-sm outline-none transition focus:ring-4"
+              [class]="invalido('nombres') ? 'border-red-400 focus:ring-red-600/10' : 'border-slate-300 focus:border-blue-700 focus:ring-blue-700/10'" />
+            @if (invalido('nombres')) { <span class="mt-1 block text-xs text-red-600">Obligatorio.</span> }
+          </label>
+          <label class="block">
+            <span class="mb-1.5 block text-sm font-medium text-slate-700">Apellido paterno <span class="text-red-600">*</span></span>
+            <input formControlName="apellidoPaterno" class="w-full rounded-xl border bg-white px-3.5 py-2.5 text-sm outline-none transition focus:ring-4"
+              [class]="invalido('apellidoPaterno') ? 'border-red-400 focus:ring-red-600/10' : 'border-slate-300 focus:border-blue-700 focus:ring-blue-700/10'" />
+            @if (invalido('apellidoPaterno')) { <span class="mt-1 block text-xs text-red-600">Obligatorio.</span> }
+          </label>
+          <label class="block">
+            <span class="mb-1.5 block text-sm font-medium text-slate-700">Apellido materno</span>
+            <input formControlName="apellidoMaterno" class="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm outline-none transition focus:border-blue-700 focus:ring-4 focus:ring-blue-700/10" />
+          </label>
+
+          <label class="block">
+            <span class="mb-1.5 block text-sm font-medium text-slate-700">CURP <span class="text-red-600">*</span></span>
+            <input formControlName="curp" maxlength="18" (input)="aMayusculas('curp')" class="w-full rounded-xl border bg-white px-3.5 py-2.5 font-mono text-sm uppercase outline-none transition focus:ring-4"
+              [class]="invalido('curp') ? 'border-red-400 focus:ring-red-600/10' : 'border-slate-300 focus:border-blue-700 focus:ring-blue-700/10'" />
+            @if (invalido('curp')) { <span class="mt-1 block text-xs text-red-600">CURP inválida (18 caracteres).</span> }
+          </label>
+          <label class="block">
+            <span class="mb-1.5 block text-sm font-medium text-slate-700">RFC <span class="text-red-600">*</span></span>
+            <input formControlName="rfc" maxlength="13" (input)="aMayusculas('rfc')" class="w-full rounded-xl border bg-white px-3.5 py-2.5 font-mono text-sm uppercase outline-none transition focus:ring-4"
+              [class]="invalido('rfc') ? 'border-red-400 focus:ring-red-600/10' : 'border-slate-300 focus:border-blue-700 focus:ring-blue-700/10'" />
+            @if (invalido('rfc')) { <span class="mt-1 block text-xs text-red-600">RFC inválido (13 caracteres con homoclave).</span> }
+          </label>
+          <label class="block">
+            <span class="mb-1.5 block text-sm font-medium text-slate-700">NSS <span class="text-red-600">*</span></span>
+            <input formControlName="nss" maxlength="11" inputmode="numeric" class="w-full rounded-xl border bg-white px-3.5 py-2.5 font-mono text-sm outline-none transition focus:ring-4"
+              [class]="invalido('nss') ? 'border-red-400 focus:ring-red-600/10' : 'border-slate-300 focus:border-blue-700 focus:ring-blue-700/10'" />
+            @if (invalido('nss')) { <span class="mt-1 block text-xs text-red-600">Deben ser 11 dígitos.</span> }
+          </label>
+
+          <label class="block">
+            <span class="mb-1.5 block text-sm font-medium text-slate-700">Teléfono</span>
+            <input formControlName="telefono" maxlength="10" inputmode="tel" class="w-full rounded-xl border bg-white px-3.5 py-2.5 text-sm outline-none transition focus:ring-4"
+              [class]="invalido('telefono') ? 'border-red-400 focus:ring-red-600/10' : 'border-slate-300 focus:border-blue-700 focus:ring-blue-700/10'" />
+            @if (invalido('telefono')) { <span class="mt-1 block text-xs text-red-600">Deben ser 10 dígitos.</span> }
+          </label>
+        </div>
+      </fieldset>
+
+      <!-- 2. Datos laborales -->
+      <fieldset class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm md:p-6">
+        <legend class="sr-only">Datos laborales</legend>
+        <h3 class="text-sm font-semibold uppercase tracking-wide text-slate-500">Datos laborales</h3>
+        <div class="mt-4 grid grid-cols-1 gap-4 md:grid-cols-3">
+          <label class="block">
+            <span class="mb-1.5 block text-sm font-medium text-slate-700">Puesto <span class="text-red-600">*</span></span>
+            <input formControlName="puesto" class="w-full rounded-xl border bg-white px-3.5 py-2.5 text-sm outline-none transition focus:ring-4"
+              [class]="invalido('puesto') ? 'border-red-400 focus:ring-red-600/10' : 'border-slate-300 focus:border-blue-700 focus:ring-blue-700/10'" />
+            @if (invalido('puesto')) { <span class="mt-1 block text-xs text-red-600">Obligatorio.</span> }
+          </label>
+          <label class="block">
+            <span class="mb-1.5 block text-sm font-medium text-slate-700">Área <span class="text-red-600">*</span></span>
+            <select formControlName="area" class="w-full rounded-xl border bg-white px-3.5 py-2.5 text-sm outline-none transition focus:ring-4"
+              [class]="invalido('area') ? 'border-red-400 focus:ring-red-600/10' : 'border-slate-300 focus:border-blue-700 focus:ring-blue-700/10'">
+              <option value="" disabled>Selecciona</option>
+              @for (a of areas; track a) { <option [value]="a">{{ a }}</option> }
+            </select>
+            @if (invalido('area')) { <span class="mt-1 block text-xs text-red-600">Obligatorio.</span> }
+          </label>
+          <label class="block">
+            <span class="mb-1.5 block text-sm font-medium text-slate-700">Contrato / orden <span class="text-red-600">*</span></span>
+            <input formControlName="contrato" placeholder="LC-2026-001" class="w-full rounded-xl border bg-white px-3.5 py-2.5 text-sm outline-none transition placeholder:text-slate-400 focus:ring-4"
+              [class]="invalido('contrato') ? 'border-red-400 focus:ring-red-600/10' : 'border-slate-300 focus:border-blue-700 focus:ring-blue-700/10'" />
+            @if (invalido('contrato')) { <span class="mt-1 block text-xs text-red-600">Obligatorio.</span> }
+          </label>
+          <label class="block">
+            <span class="mb-1.5 block text-sm font-medium text-slate-700">Supervisor <span class="text-red-600">*</span></span>
+            <input formControlName="supervisor" class="w-full rounded-xl border bg-white px-3.5 py-2.5 text-sm outline-none transition focus:ring-4"
+              [class]="invalido('supervisor') ? 'border-red-400 focus:ring-red-600/10' : 'border-slate-300 focus:border-blue-700 focus:ring-blue-700/10'" />
+            @if (invalido('supervisor')) { <span class="mt-1 block text-xs text-red-600">Obligatorio.</span> }
+          </label>
+          <label class="block">
+            <span class="mb-1.5 block text-sm font-medium text-slate-700">Fecha de ingreso <span class="text-red-600">*</span></span>
+            <input type="date" formControlName="fechaIngreso" class="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm outline-none transition focus:border-blue-700 focus:ring-4 focus:ring-blue-700/10" />
+          </label>
+          <!-- Tallas: necesarias para "Definir EPP por puesto y talla" -->
+          <div class="grid grid-cols-2 gap-3">
+            <label class="block">
+              <span class="mb-1.5 block text-sm font-medium text-slate-700">Talla ropa <span class="text-red-600">*</span></span>
+              <select formControlName="tallaRopa" class="w-full rounded-xl border bg-white px-3 py-2.5 text-sm outline-none transition focus:ring-4"
+                [class]="invalido('tallaRopa') ? 'border-red-400 focus:ring-red-600/10' : 'border-slate-300 focus:border-blue-700 focus:ring-blue-700/10'">
+                <option value="" disabled>—</option>
+                @for (t of tallasRopa; track t) { <option [value]="t">{{ t }}</option> }
+              </select>
+            </label>
+            <label class="block">
+              <span class="mb-1.5 block text-sm font-medium text-slate-700">Calzado <span class="text-red-600">*</span></span>
+              <select formControlName="tallaCalzado" class="w-full rounded-xl border bg-white px-3 py-2.5 text-sm outline-none transition focus:ring-4"
+                [class]="invalido('tallaCalzado') ? 'border-red-400 focus:ring-red-600/10' : 'border-slate-300 focus:border-blue-700 focus:ring-blue-700/10'">
+                <option value="" disabled>—</option>
+                @for (t of tallasCalzado; track t) { <option [value]="t">{{ t }}</option> }
+              </select>
+            </label>
+          </div>
+        </div>
+      </fieldset>
+
+      <!-- 3. Documentación e inducción -->
+      <fieldset class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm md:p-6">
+        <legend class="sr-only">Documentación</legend>
+        <div class="flex items-center justify-between">
+          <h3 class="text-sm font-semibold uppercase tracking-wide text-slate-500">Documentación entregada</h3>
+          <span class="text-xs font-medium text-slate-500">{{ documentosEntregados() }} de {{ documentos.length }}</span>
+        </div>
+
+        <!-- formGroupName conecta este bloque con el subgrupo "documentos" -->
+        <div formGroupName="documentos" class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          @for (d of documentos; track d.clave) {
+            <label class="flex cursor-pointer items-center gap-3 rounded-xl border border-slate-200 px-4 py-3 transition hover:bg-slate-50 has-[:checked]:border-blue-700 has-[:checked]:bg-blue-50">
+              <input type="checkbox" [formControlName]="d.clave" class="size-4 accent-blue-700" />
+              <span class="text-sm text-slate-700">{{ d.texto }}</span>
+            </label>
+          }
+        </div>
+
+        <label class="mt-4 flex cursor-pointer items-start gap-3 rounded-xl bg-orange-50/60 px-4 py-3 ring-1 ring-orange-200 has-[:checked]:bg-emerald-50 has-[:checked]:ring-emerald-300">
+          <input type="checkbox" formControlName="induccionSeguridad" class="mt-0.5 size-4 accent-emerald-600" />
+          <span class="text-sm text-slate-700">
+            <span class="font-medium">Recibió la inducción de seguridad.</span>
+            Sin inducción no se le puede entregar EPP ni iniciar actividades.
+          </span>
+        </label>
+      </fieldset>
+
+      <div class="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+        <button type="button" (click)="nuevoRegistro()"
+          class="rounded-xl px-5 py-2.5 text-sm font-semibold text-slate-600 ring-1 ring-slate-300 hover:bg-white">Limpiar</button>
+        <button type="submit" [disabled]="guardando()"
+          class="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-700 px-6 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-800 disabled:opacity-60">
+          @if (guardando()) {
+            <svg class="size-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" /><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 0 1 8-8v4a4 4 0 0 0-4 4H4Z" /></svg>
+          }
+          Registrar trabajador
+        </button>
+      </div>
+    </form>
+  }
+</div>

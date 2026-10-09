@@ -1,0 +1,27 @@
+<!-- Modal de confirmación con <dialog> nativo -->
+<dialog #dialogo (click)="clicFondo($event)" (cancel)="$event.preventDefault(); cancelar()"
+  class="m-auto w-[calc(100%-2rem)] max-w-md rounded-2xl p-0 shadow-2xl backdrop:bg-slate-900/60 backdrop:backdrop-blur-sm">
+  <div class="p-6">
+    <div class="flex size-12 items-center justify-center rounded-full bg-red-100 text-red-600">
+      <svg class="size-6" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" /></svg>
+    </div>
+    <h3 class="mt-4 text-lg font-semibold text-slate-900">{{ titulo() }}</h3>
+
+    <!-- Aquí se inserta el texto que escribe el padre -->
+    <div class="mt-2 text-sm text-slate-600"><ng-content /></div>
+
+    <div class="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+      <button type="button" [disabled]="procesando()" (click)="cancelar()"
+        class="rounded-xl px-5 py-2.5 text-sm font-semibold text-slate-600 ring-1 ring-slate-300 hover:bg-slate-50 disabled:opacity-50">
+        Regresar
+      </button>
+      <button type="button" [disabled]="procesando()" (click)="confirmar.emit()"
+        class="inline-flex items-center justify-center gap-2 rounded-xl bg-red-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60">
+        @if (procesando()) {
+          <svg class="size-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" /><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 0 1 8-8v4a4 4 0 0 0-4 4H4Z" /></svg>
+        }
+        {{ textoConfirmar() }}
+      </button>
+    </div>
+  </div>
+</dialog>

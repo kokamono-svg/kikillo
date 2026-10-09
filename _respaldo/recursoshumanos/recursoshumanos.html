@@ -1,0 +1,253 @@
+<!-- =====================================================================
+     rh-baja.component.html
+     Panel de RH: baja de trabajadores con validación de adeudos.
+     Usa Tailwind CSS + DaisyUI.
+====================================================================== -->
+<section class="min-h-screen bg-base-200 p-4 md:p-8">
+  <div class="mx-auto max-w-5xl space-y-6">
+
+    <!-- ===== ENCABEZADO ===== -->
+    <header class="rounded-box bg-neutral p-6 text-neutral-content shadow-lg">
+      <p class="text-xs font-semibold uppercase tracking-widest text-orange-400">Recursos Humanos</p>
+      <h1 class="mt-1 text-2xl font-bold md:text-3xl">Baja de trabajadores</h1>
+    </header>
+
+    <!-- ===== PASO 1: BUSCAR ===== -->
+    <div class="card bg-base-100 shadow">
+      <div class="card-body">
+        <h2 class="card-title text-base">1. Buscar trabajador</h2>
+
+        <!-- (ngSubmit) ejecuta buscar() al presionar Enter o el botón -->
+        <form class="flex flex-col gap-3 sm:flex-row" (ngSubmit)="buscar()">
+          <input
+            type="text"
+            name="terminoBusqueda"
+            class="input input-bordered w-full"
+            placeholder="Número de empleado o nombre (ej. IMH-0142)"
+            [(ngModel)]="terminoBusqueda"
+            autocomplete="off" />
+          <button type="submit" class="btn btn-primary sm:w-36" [disabled]="buscando()">
+            @if (buscando()) {
+              <span class="loading loading-spinner loading-sm"></span>
+            } @else {
+              Buscar
+            }
+          </button>
+        </form>
+
+        <!-- Lista de resultados cuando hay más de uno -->
+        @if (resultados().length > 1) {
+          <ul class="menu mt-2 rounded-box border border-base-300 bg-base-100 p-0">
+            @for (t of resultados(); track t.id) {
+              <li>
+                <button type="button" class="flex justify-between" (click)="seleccionar(t)">
+                  <span><strong>{{ t.numeroEmpleado }}</strong> · {{ t.nombre }}</span>
+                  <span class="text-xs opacity-60">{{ t.area }}</span>
+                </button>
+              </li>
+            }
+          </ul>
+        }
+
+        @if (busquedaRealizada() && resultados().length === 0 && !trabajador()) {
+          <p class="mt-2 text-sm opacity-70">No se encontró ningún trabajador con ese dato.</p>
+        }
+      </div>
+    </div>
+
+    <!-- ===== MENSAJES GENERALES ===== -->
+    @if (error()) {
+      <div role="alert" class="alert alert-error">
+        <span>{{ error() }}</span>
+      </div>
+    }
+    @if (exito()) {
+      <div role="alert" class="alert alert-success">
+        <span>{{ exito() }}</span>
+        <button type="button" class="btn btn-sm" (click)="reiniciar()">Nueva baja</button>
+      </div>
+    }
+
+    <!-- ===== PASO 2: DATOS Y VALIDACIÓN ===== -->
+    @if (trabajador(); as t) {
+      <div class="card bg-base-100 shadow">
+        <div class="card-body">
+          <div class="flex flex-wrap items-start justify-between gap-3">
+            <h2 class="card-title text-base">2. Datos del trabajador</h2>
+            @if (t.activo) {
+              <span class="badge badge-success">Activo</span>
+            } @else {
+              <span class="badge badge-neutral">Dado de baja</span>
+            }
+          </div>
+
+          <!-- Tarjeta con los datos -->
+          <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div>
+              <p class="text-xs uppercase opacity-60">Nombre</p>
+              <p class="font-semibold">{{ t.nombre }}</p>
+            </div>
+            <div>
+              <p class="text-xs uppercase opacity-60">No. empleado</p>
+              <p class="font-semibold">{{ t.numeroEmpleado }}</p>
+            </div>
+            <div>
+              <p class="text-xs uppercase opacity-60">Puesto</p>
+              <p class="font-semibold">{{ t.puesto }}</p>
+            </div>
+            <div>
+              <p class="text-xs uppercase opacity-60">Área</p>
+              <p class="font-semibold">{{ t.area }}</p>
+            </div>
+            <div>
+              <p class="text-xs uppercase opacity-60">Fecha de ingreso</p>
+              <p class="font-semibold">{{ t.fechaIngreso | date: 'dd/MM/yyyy' }}</p>
+            </div>
+          </div>
+
+          <div class="divider my-2"></div>
+
+          <!-- Resultado de la validación de adeudos -->
+          @if (!t.activo) {
+            <div class="alert">
+              <span>Este trabajador ya está dado de baja. No hay nada más que hacer.</span>
+            </div>
+          } @else if (validando()) {
+            <div class="flex items-center gap-3 py-4">
+              <span class="loading loading-spinner text-primary"></span>
+              <span>Revisando préstamos pendientes en el almacén...</span>
+            </div>
+          } @else if (tieneAdeudos()) {
+            <div role="alert" class="alert alert-error">
+              <div>
+                <p class="font-bold">No se puede dar de baja</p>
+                <p class="text-sm">
+                  Tiene {{ adeudos().length }} préstamo(s) sin devolver
+                  ({{ totalPiezas() }} pieza(s) en total). Debe regresarlos al almacén primero.
+                </p>
+              </div>
+            </div>
+
+            <!-- Tabla de adeudos; overflow-x-auto la hace deslizable en celular -->
+            <div class="overflow-x-auto">
+              <table class="table table-zebra table-sm">
+                <thead>
+                  <tr>
+                    <th>Código</th>
+                    <th>Descripción</th>
+                    <th>Tipo</th>
+                    <th class="text-center">Cant.</th>
+                    <th>Prestado el</th>
+                    <th>Almacén</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (a of adeudos(); track a.idPrestamo) {
+                    <tr>
+                      <td class="font-mono text-xs">{{ a.codigoBarras }}</td>
+                      <td>{{ a.descripcion }}</td>
+                      <td><span class="badge badge-ghost badge-sm">{{ a.tipo }}</span></td>
+                      <td class="text-center">{{ a.cantidadPendiente }}</td>
+                      <td>
+                        {{ a.fechaPrestamo | date: 'dd/MM/yyyy' }}
+                        <!-- Naranja sutil si lleva más de 30 días -->
+                        @if (diasPrestado(a.fechaPrestamo) > 30) {
+                          <span class="badge badge-warning badge-xs ml-1">{{ diasPrestado(a.fechaPrestamo) }} días</span>
+                        }
+                      </td>
+                      <td>{{ a.almacen }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+
+            <div class="card-actions justify-end">
+              <button type="button" class="btn btn-outline btn-sm" (click)="validarAdeudos(t.id)">
+                Volver a verificar
+              </button>
+            </div>
+          } @else {
+            <div role="alert" class="alert alert-success">
+              <span>Sin adeudos: el trabajador devolvió todo el equipo y las herramientas.</span>
+            </div>
+          }
+        </div>
+      </div>
+
+      <!-- ===== PASO 3: FORMULARIO DE BAJA (solo si está activo y sin adeudos) ===== -->
+      @if (t.activo && !validando() && !tieneAdeudos()) {
+        <div class="card bg-base-100 shadow">
+          <div class="card-body">
+            <h2 class="card-title text-base">3. Registrar la baja</h2>
+
+            <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <label class="form-control w-full">
+                <span class="label-text mb-1">Motivo de la baja *</span>
+                <select class="select select-bordered w-full" name="motivo" [(ngModel)]="motivo">
+                  <option value="" disabled>Selecciona un motivo</option>
+                  @for (m of motivos; track m) {
+                    <option [value]="m">{{ m }}</option>
+                  }
+                </select>
+              </label>
+
+              <label class="form-control w-full">
+                <span class="label-text mb-1">Fecha de baja *</span>
+                <input type="date" class="input input-bordered w-full" name="fechaBaja" [(ngModel)]="fechaBaja" />
+              </label>
+
+              <label class="form-control w-full md:col-span-2">
+                <span class="label-text mb-1">Comentarios</span>
+                <textarea
+                  class="textarea textarea-bordered w-full"
+                  rows="3"
+                  name="comentarios"
+                  placeholder="Observaciones (opcional)"
+                  [(ngModel)]="comentarios"></textarea>
+              </label>
+            </div>
+
+            <label class="mt-2 flex cursor-pointer items-center gap-3">
+              <input type="checkbox" class="checkbox checkbox-primary" name="confirmado" [(ngModel)]="confirmado" />
+              <span class="text-sm">Confirmo que revisé los datos y que el trabajador no tiene adeudos.</span>
+            </label>
+
+            <div class="card-actions mt-4 justify-end">
+              <button type="button" class="btn btn-ghost" (click)="reiniciar()">Cancelar</button>
+              <button type="button" class="btn btn-error" [disabled]="!puedeDarDeBaja()" (click)="abrirConfirmacion()">
+                Dar de baja
+              </button>
+            </div>
+          </div>
+        </div>
+      }
+    }
+  </div>
+
+  <!-- ===== MODAL DE CONFIRMACIÓN (DaisyUI) ===== -->
+  <dialog #modalConfirmacion class="modal modal-bottom sm:modal-middle">
+    <div class="modal-box">
+      <h3 class="text-lg font-bold">¿Confirmar la baja?</h3>
+      <p class="py-4">
+        Se dará de baja a <strong>{{ trabajador()?.nombre }}</strong>
+        ({{ trabajador()?.numeroEmpleado }}) por el motivo
+        <strong>{{ motivo }}</strong>. Esta acción no se puede deshacer desde este panel.
+      </p>
+      <div class="modal-action">
+        <button type="button" class="btn btn-ghost" [disabled]="procesando()" (click)="modalConfirmacion.close()">
+          Regresar
+        </button>
+        <button type="button" class="btn btn-error" [disabled]="procesando()" (click)="confirmarBaja()">
+          @if (procesando()) {
+            <span class="loading loading-spinner loading-sm"></span>
+          }
+          Sí, dar de baja
+        </button>
+      </div>
+    </div>
+    <!-- Clic fuera del recuadro cierra el modal -->
+    <!-- ngNoForm: evita que Angular intercepte este form y bloquee el cierre -->
+    <form method="dialog" class="modal-backdrop" ngNoForm><button>cerrar</button></form>
+  </dialog>
+</section>

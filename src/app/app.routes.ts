@@ -12,14 +12,17 @@ export const routes: Routes = [
     path: '',
     component: LoginComponent
   },
-
+  {
+    path: 'rh',
+    loadChildren: () => import('./rh/rh.routes').then((m) => m.RH_ROUTES),
+  },
   {
 path: 'solicitante',
 component: SolicitanteComponent,
   },
 {
 path: '**',
-    redirectTo: 'login',
+    redirectTo: '',
 }
 
 ];

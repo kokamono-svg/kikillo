@@ -1,0 +1,92 @@
+<!-- Vale imprimible con formato IMHOTEP -->
+@let v = vale();
+<article class="mx-auto max-w-4xl rounded-2xl border-2 border-slate-800 bg-white p-6 text-slate-900 shadow-sm md:p-8 print:max-w-none print:rounded-none print:border print:shadow-none">
+
+  <!-- Encabezado: marca, título y folio -->
+  <header class="flex flex-col gap-4 border-b-2 border-slate-800 pb-4 sm:flex-row sm:items-center sm:justify-between">
+    <div class="flex items-center gap-3">
+      <div class="flex size-14 items-center justify-center rounded-full bg-slate-900 text-[10px] font-bold leading-tight text-white ring-4 ring-blue-700">
+        IMH
+      </div>
+      <div>
+        <p class="text-lg font-extrabold tracking-wide">IMHOTEP</p>
+        <p class="text-xs text-slate-500">Mantenimiento Industrial</p>
+      </div>
+    </div>
+    <h2 class="text-center text-lg font-bold uppercase text-blue-900 sm:text-xl">{{ titulo() }}</h2>
+    <div class="text-center">
+      <p class="text-xs font-semibold uppercase text-slate-500">Folio</p>
+      <p class="rounded-md border-2 border-red-600 px-3 py-1 font-mono text-lg font-bold text-red-600">{{ v.folio }}</p>
+    </div>
+  </header>
+
+  <!-- Datos del trabajador -->
+  <section class="mt-4 grid grid-cols-1 gap-x-8 gap-y-2 text-sm sm:grid-cols-2">
+    <p><span class="font-semibold">Nombre:</span> {{ nombreCompleto(v.trabajador) }}</p>
+    <p><span class="font-semibold">Fecha:</span> {{ v.fecha | date: 'dd/MM/yyyy HH:mm' }}</p>
+    <p><span class="font-semibold">No. empleado:</span> {{ v.trabajador.numeroEmpleado }}</p>
+    <p><span class="font-semibold">NSS:</span> {{ v.trabajador.nss }}</p>
+    <p><span class="font-semibold">Puesto:</span> {{ v.trabajador.puesto }}</p>
+    <p><span class="font-semibold">Área / contrato:</span> {{ v.trabajador.area }} · {{ v.trabajador.contrato }}</p>
+    <p><span class="font-semibold">Supervisor:</span> {{ v.trabajador.supervisor }}</p>
+    <p><span class="font-semibold">Observaciones:</span> {{ v.observaciones }}</p>
+  </section>
+
+  <!-- Tabla de artículos -->
+  <div class="mt-5 overflow-x-auto">
+    <table class="w-full min-w-[560px] border border-slate-800 text-left text-sm">
+      <thead class="bg-blue-100 text-xs uppercase text-blue-900">
+        <tr>
+          <th class="border border-slate-800 px-2 py-2 text-center">No.</th>
+          <th class="border border-slate-800 px-2 py-2">Concepto</th>
+          <th class="border border-slate-800 px-2 py-2">Tipo</th>
+          <th class="border border-slate-800 px-2 py-2">ID / serie</th>
+          <th class="border border-slate-800 px-2 py-2 text-center">Cant.</th>
+          <th class="border border-slate-800 px-2 py-2">{{ esAdeudo() ? 'Estado al volver' : 'Estado al salir' }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (r of v.renglones; track $index; let i = $index) {
+          <tr>
+            <td class="border border-slate-800 px-2 py-1.5 text-center">{{ i + 1 }}</td>
+            <td class="border border-slate-800 px-2 py-1.5">{{ r.descripcion }}</td>
+            <td class="border border-slate-800 px-2 py-1.5">{{ r.tipoArticulo }}</td>
+            <td class="border border-slate-800 px-2 py-1.5 font-mono text-xs">{{ r.idSerie ?? '—' }}</td>
+            <td class="border border-slate-800 px-2 py-1.5 text-center">{{ r.cantidad }}</td>
+            <!-- En el vale de adeudos se deja vacío para llenarlo a mano al devolver -->
+            <td class="border border-slate-800 px-2 py-1.5">{{ esAdeudo() ? '' : r.estado }}</td>
+          </tr>
+        }
+      </tbody>
+      <tfoot>
+        <tr class="bg-slate-50 font-semibold">
+          <td colspan="4" class="border border-slate-800 px-2 py-1.5 text-right">Total de piezas</td>
+          <td class="border border-slate-800 px-2 py-1.5 text-center">{{ totalPiezas() }}</td>
+          <td class="border border-slate-800"></td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+
+  <!-- Firmas -->
+  <section class="mt-10 grid grid-cols-1 gap-8 sm:grid-cols-3">
+    @for (f of firmas(); track f.rol) {
+      <div class="text-center">
+        <div class="h-10 border-b border-slate-800"></div>
+        <p class="mt-1 text-sm font-medium">{{ f.nombre || ' ' }}</p>
+        <p class="text-xs text-slate-500">{{ f.rol }}</p>
+      </div>
+    }
+  </section>
+
+  <!-- Leyenda -->
+  <footer class="mt-8 rounded-lg border border-dashed border-orange-400 px-4 py-3 text-xs text-slate-600">
+    @if (esAdeudo()) {
+      <p class="font-semibold text-orange-700">IMPORTANTE</p>
+      <p>No se puede procesar la baja del trabajador hasta que devuelva los artículos de este vale o se registre su reposición.</p>
+    } @else {
+      <p class="font-semibold text-orange-700">IMPORTANTE</p>
+      <p>Este vale es personal e intransferible. El equipo es propiedad de la empresa y debe devolverse en buen estado. Cualquier daño o pérdida será responsabilidad del trabajador.</p>
+    }
+  </footer>
+</article>

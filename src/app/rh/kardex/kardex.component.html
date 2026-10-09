@@ -1,0 +1,112 @@
+<!-- Pantalla de KARDEX del trabajador -->
+<div class="space-y-6">
+  <div class="print:hidden">
+    <h2 class="text-xl font-bold text-slate-900">Kardex del trabajador</h2>
+    <p class="mt-1 text-sm text-slate-500">Historial de entregas, devoluciones, reposiciones, daños y pérdidas.</p>
+  </div>
+
+  <app-buscador-trabajador (seleccionado)="seleccionar($event)" />
+
+  @if (error()) {
+    <div role="alert" class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{{ error() }}</div>
+  }
+
+  @if (trabajador(); as t) {
+    <!-- Título que solo aparece en la hoja impresa -->
+    <div class="hidden print:block">
+      <p class="text-xs font-semibold uppercase tracking-widest">IMHOTEP · Mantenimiento Industrial</p>
+      <h2 class="text-xl font-bold">Kardex de {{ nombreCompleto(t) }} ({{ t.numeroEmpleado }})</h2>
+    </div>
+
+    <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
+      <div class="print:hidden"><app-tarjeta-trabajador [trabajador]="t" /></div>
+
+      <div class="space-y-6 lg:col-span-2 print:col-span-3">
+        <!-- Resumen -->
+        <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div class="rounded-xl border border-slate-200 bg-white px-4 py-3">
+            <p class="text-xs text-slate-500">Entregadas</p>
+            <p class="mt-1 text-2xl font-bold text-blue-700">{{ resumen().entregadas }}</p>
+          </div>
+          <div class="rounded-xl border border-slate-200 bg-white px-4 py-3">
+            <p class="text-xs text-slate-500">Devueltas</p>
+            <p class="mt-1 text-2xl font-bold text-emerald-600">{{ resumen().devueltas }}</p>
+          </div>
+          <div class="rounded-xl border border-slate-200 bg-white px-4 py-3">
+            <p class="text-xs text-slate-500">Pendientes</p>
+            <p class="mt-1 text-2xl font-bold" [class]="resumen().pendientes > 0 ? 'text-red-600' : 'text-slate-900'">{{ resumen().pendientes }}</p>
+          </div>
+          <div class="rounded-xl border border-slate-200 bg-white px-4 py-3">
+            <p class="text-xs text-slate-500">Consumibles</p>
+            <p class="mt-1 text-2xl font-bold text-slate-900">{{ resumen().consumibles }}</p>
+          </div>
+        </div>
+        @if (resumen().incidencias > 0) {
+          <p class="rounded-lg bg-orange-50 px-3 py-2 text-xs font-medium text-orange-700 ring-1 ring-orange-600/20">
+            {{ resumen().incidencias }} incidencia(s) de daño o pérdida registradas.
+          </p>
+        }
+
+        <!-- Movimientos -->
+        <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm md:p-6 print:border-0 print:p-0 print:shadow-none">
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <h3 class="text-sm font-semibold uppercase tracking-wide text-slate-500">Movimientos</h3>
+            <div class="flex gap-2 print:hidden">
+              <!-- ngModel con un signal: [ngModel] lee, (ngModelChange) escribe -->
+              <select [ngModel]="filtro()" (ngModelChange)="filtro.set($event)"
+                class="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-blue-700 focus:ring-4 focus:ring-blue-700/10">
+                <option value="">Todos</option>
+                @for (tipo of tipos; track tipo) { <option [value]="tipo">{{ estilos[tipo].texto }}</option> }
+              </select>
+              <button type="button" (click)="imprimir()" class="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800">Imprimir</button>
+            </div>
+          </div>
+
+          @if (cargando()) {
+            <p class="mt-4 text-sm text-slate-500">Cargando kardex...</p>
+          } @else if (filtrados().length === 0) {
+            <p class="mt-4 rounded-xl bg-slate-50 px-4 py-4 text-sm text-slate-500">Sin movimientos{{ filtro() ? ' de este tipo' : '' }}.</p>
+          } @else {
+            <div class="mt-4 overflow-x-auto rounded-xl border border-slate-200">
+              <table class="w-full min-w-[720px] text-left text-sm">
+                <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+                  <tr>
+                    <th class="px-4 py-3 font-semibold">Fecha</th>
+                    <th class="px-4 py-3 font-semibold">Movimiento</th>
+                    <th class="px-4 py-3 font-semibold">Artículo</th>
+                    <th class="px-4 py-3 text-center font-semibold">Cant.</th>
+                    <th class="px-4 py-3 font-semibold">Almacén</th>
+                    <th class="px-4 py-3 font-semibold">Vale</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                  @for (m of filtrados(); track m.id) {
+                    <tr class="hover:bg-slate-50">
+                      <td class="whitespace-nowrap px-4 py-3">
+                        {{ m.fecha | date: 'dd/MM/yyyy' }}
+                        <span class="block text-xs text-slate-400">{{ m.fecha | date: 'HH:mm' }}</span>
+                      </td>
+                      <td class="px-4 py-3">
+                        <span class="rounded-full px-2 py-0.5 text-xs font-medium ring-1" [class]="estilos[m.tipo].clases">{{ estilos[m.tipo].texto }}</span>
+                      </td>
+                      <td class="px-4 py-3">
+                        <p class="font-medium text-slate-900">{{ m.descripcion }}</p>
+                        <p class="text-xs text-slate-500">{{ m.tipoArticulo }}{{ m.idSerie ? ' · ' + m.idSerie : '' }}</p>
+                      </td>
+                      <td class="px-4 py-3 text-center font-semibold">{{ estilos[m.tipo].signo }}{{ m.cantidad }}</td>
+                      <td class="px-4 py-3 text-slate-600">{{ m.almacen }}</td>
+                      <td class="px-4 py-3 text-slate-600">
+                        {{ m.folioVale ? 'Vale ' + m.folioVale : '—' }}
+                        <span class="block text-xs text-slate-400">{{ m.responsable }}</span>
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          }
+        </div>
+      </div>
+    </div>
+  }
+</div>
