@@ -1,3 +1,4 @@
+
 {
   "$schema": "./node_modules/@angular/cli/lib/config/schema.json",
   "version": 1,
@@ -53,18 +54,25 @@
           },
           "defaultConfiguration": "production"
         },
-        "serve": {
-          "builder": "@angular/build:dev-server",
-          "configurations": {
-            "production": {
-              "buildTarget": "hackathon:build:production"
-            },
-            "development": {
-              "buildTarget": "hackathon:build:development"
-            }
-          },
-          "defaultConfiguration": "development"
-        },
+
+"serve": {
+  "builder": "@angular/build:dev-server",
+  "options": {
+    "allowedHosts": [
+      "concerns-happened-empire-guitars.trycloudflare.com"
+    ]
+  },
+  "configurations": {
+    "production": {
+      "buildTarget": "hackathon:build:production"
+    },
+    "development": {
+      "buildTarget": "hackathon:build:development"
+    }
+  },
+  "defaultConfiguration": "development"
+},
+
         "test": {
           "builder": "@angular/build:unit-test"
         }

@@ -2,6 +2,7 @@ import { Routes } from '@angular/router';
 import { LoginComponent } from './login.component/login.component';
 import { SolicitanteComponent } from './solicitante.component/solicitante.component';
 import { AlmacenistaComponent } from './almacenista/almacenista.component';
+import { Mapa3d } from './components/mapa3d/mapa3d';
 
 export const routes: Routes = [
 
@@ -20,14 +21,14 @@ export const routes: Routes = [
   {
 path: 'solicitante',
 component: SolicitanteComponent,
-  }, 
+  },
    {
 path: 'almacenista',
 component: AlmacenistaComponent,
   },
 {
 path: '**',
-    redirectTo: '',
+    component: Mapa3d,
 }
 
 ];
