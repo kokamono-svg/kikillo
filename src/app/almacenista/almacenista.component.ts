@@ -1,0 +1,351 @@
+import { Component, computed, inject, signal, viewChild, ElementRef } from '@angular/core';
+import { DatePipe } from '@angular/common';
+import { AlmacenService } from './almacen.service';
+import { Articulo, LineaVale, Vale } from './almacen.models';
+import { FirmaPad } from './firma-pad/firma-pad';
+
+/* =====================================================
+   PANTALLA DEL ALMACENISTA
+   Flujo en 4 pasos:
+     1. Equipo   → buscar o escanear lo que pide el trabajador
+     2. Empleado → nombre, número, actividad, motivo y fecha de entrega
+     3. Firma    → el trabajador firma en el celular
+     4. Vale     → se genera con folio, datos, equipo y firma
+===================================================== */
+
+/** PIN de supervisor para la demo. En producción se valida en el servidor. */
+const PIN_SUPERVISOR = '1234';
+
+@Component({
+  selector: 'app-almacenista',
+  imports: [FirmaPad, DatePipe],
+  templateUrl: './almacenista.component.html',
+  styleUrl: './almacenista.component.css',
+})
+export class AlmacenistaComponent {
+  /* inject() pide a Angular la instancia del servicio (la misma para toda la app) */
+  readonly almacen = inject(AlmacenService);
+
+  /* ---------- Datos fijos de la demo (luego vendrán del login) ---------- */
+  readonly almacenista = 'Oscar Salas';
+  readonly almacenes = [
+    'Colonia de Contratistas (Mittal)',
+    'Central Kepler',
+    'Área Midrex',
+    'Área HYL',
+    'Área Laminador',
+    'Área Minas',
+  ];
+  readonly pasos = ['Equipo', 'Empleado', 'Firma', 'Vale'];
+
+  /** Fecha de hoy en formato AAAA-MM-DD (para el mínimo del calendario). */
+  readonly hoy = this.fechaISO(new Date());
+
+  /* ---------- Estado de la pantalla (signals) ---------- */
+  readonly paso = signal(1);
+  readonly vista = signal<'nuevo' | 'historial'>('nuevo');
+
+  // Paso 1: equipo
+  readonly busqueda = signal('');
+  readonly codigoEscaneado = signal('');
+  readonly carrito = signal<LineaVale[]>([]);
+
+  // Autorización de supervisor cuando se pasa el límite
+  readonly pendiente = signal<{ articulo: Articulo; serie?: string } | null>(null);
+  readonly supervisorNombre = signal('');
+  readonly supervisorPin = signal('');
+  readonly autorizoSupervisor = signal('');
+  /** Códigos que el supervisor ya autorizó para exceder el límite en este vale. */
+  readonly autorizados = signal<string[]>([]);
+
+  // Paso 2: empleado
+  readonly almacenElegido = signal(this.almacenes[0]);
+  readonly nombre = signal('');
+  readonly numeroEmpleado = signal('');
+  readonly actividad = signal('');
+  readonly motivo = signal('');
+  readonly fechaDevolucion = signal(this.fechaISO(this.sumarDias(new Date(), 7)));
+
+  // Paso 3: firma
+  readonly firma = signal('');
+
+  // Paso 4: vale generado (o uno abierto desde el historial)
+  readonly valeActual = signal<Vale | null>(null);
+
+  // Mensaje corto de aviso (verde = ok, naranja = alerta)
+  readonly aviso = signal<{ texto: string; tipo: 'ok' | 'alerta' } | null>(null);
+
+  readonly inputEscaner =
+  viewChild<ElementRef<HTMLInputElement>>('inputEscaner');
+  /* ---------- Valores calculados ---------- */
+
+  /** Catálogo filtrado por el buscador (ignora acentos y mayúsculas). */
+  readonly filtrados = computed(() => {
+    const t = this.normalizar(this.busqueda());
+    return this.almacen
+      .catalogo()
+      .filter((a) => this.normalizar(a.nombre).includes(t) || a.codigo.toLowerCase().includes(t));
+  });
+
+  readonly totalPiezas = computed(() => this.carrito().reduce((s, l) => s + l.cantidad, 0));
+
+  /** Texto que explica qué falta para avanzar ('' = todo listo). */
+  readonly falta = computed(() => {
+    switch (this.paso()) {
+      case 1:
+        return this.carrito().length ? '' : 'Agrega al menos un artículo.';
+      case 2:
+        if (!this.nombre().trim()) return 'Escribe el nombre del trabajador.';
+        if (!this.numeroEmpleado().trim()) return 'Escribe el número de empleado.';
+        if (!this.actividad().trim()) return 'Indica la actividad que realizará.';
+        if (!this.motivo().trim()) return 'Indica para qué ocupa el equipo.';
+        if (!this.fechaDevolucion() || this.fechaDevolucion() < this.hoy) return 'Elige una fecha de entrega válida.';
+        return '';
+      case 3:
+        return this.firma() ? '' : 'El trabajador debe firmar.';
+      default:
+        return '';
+    }
+  });
+
+  /* =====================================================
+     PASO 1: AGREGAR EQUIPO
+  ===================================================== */
+
+  /** Cuántas unidades de un artículo ya están en el carrito. */
+  enCarrito(codigo: string): number {
+    return this.carrito()
+      .filter((l) => l.codigo === codigo)
+      .reduce((s, l) => s + l.cantidad, 0);
+  }
+
+  /** ¿Esta pieza ya está en el carrito? (para deshabilitar su botón) */
+  piezaEnCarrito(serie: string): boolean {
+    return this.carrito().some((l) => l.serie === serie);
+  }
+
+  /**
+   * Agrega un artículo al vale aplicando las reglas del reto:
+   *  - equipo por pieza: hay que elegir una pieza "apto" y libre
+   *  - no se puede entregar más de lo que hay
+   *  - si se supera el límite, se pide autorización de supervisor
+   */
+  agregar(a: Articulo, serie?: string): void {
+    // Regla: equipo por pieza necesita la serie exacta
+    if (a.piezas && !serie) {
+      this.avisar(`${a.nombre}: elige o escanea la pieza (código individual).`, 'alerta');
+      return;
+    }
+    if (serie) {
+      const pieza = a.piezas?.find((p) => p.serie === serie);
+      if (!pieza || pieza.estado === 'no apto') {
+        this.avisar(`${serie} está marcado como NO APTO. No se puede entregar; sepáralo para revisión.`, 'alerta');
+        return;
+      }
+      if (pieza.prestada || this.piezaEnCarrito(serie)) {
+        this.avisar(`${serie} ya está asignado.`, 'alerta');
+        return;
+      }
+    }
+
+    const yaLleva = this.enCarrito(a.codigo);
+
+    // Regla: no entregar más de lo que hay en existencia
+    if (!a.piezas && yaLleva + 1 > a.stock) {
+      this.avisar(`Sin existencias suficientes de ${a.nombre}.`, 'alerta');
+      return;
+    }
+
+    // Regla: límite por artículo → se bloquea hasta que el supervisor autorice
+    if (yaLleva + 1 > a.limite && !this.autorizados().includes(a.codigo)) {
+      this.pendiente.set({ articulo: a, serie });
+      return;
+    }
+
+    this.meterAlCarrito(a, serie);
+  }
+
+  /** Mete el artículo al carrito sin revisar reglas (ya se revisaron). */
+  private meterAlCarrito(a: Articulo, serie?: string): void {
+    this.carrito.update((lista) => {
+      // Los artículos por cantidad suman en el mismo renglón; las piezas van cada una en su renglón
+      const existente = !serie && lista.find((l) => l.codigo === a.codigo);
+      if (existente) {
+        return lista.map((l) => (l === existente ? { ...l, cantidad: l.cantidad + 1 } : l));
+      }
+      return [...lista, { codigo: a.codigo, nombre: a.nombre, tipo: a.tipo, cantidad: 1, serie }];
+    });
+    this.avisar(`${a.nombre}${serie ? ' · ' + serie : ''} agregado.`, 'ok');
+  }
+
+  /**
+   * Lectura de QR / pistola lectora.
+   * La pistola funciona como un teclado: escribe el código y manda Enter.
+   * Por eso basta con un input que reaccione al Enter.
+   */
+  escanear(): void {
+   const codigo = this.codigoEscaneado().trim().toUpperCase().replace(/'/g, '-');
+    this.codigoEscaneado.set('');
+    if (!codigo) return;
+    const a = this.almacen.buscarPorCodigo(codigo);
+    if (!a) {
+      this.avisar(`El código ${codigo} no existe en el catálogo.`, 'alerta');
+      return;
+      
+    }
+    this.inputEscaner()?.nativeElement.focus();
+    // Si el código es la serie de una pieza, se agrega esa pieza exacta
+    const esPieza = a.piezas?.some((p) => p.serie === codigo);
+    this.agregar(a, esPieza ? codigo : undefined);
+  }
+
+  /** Suma o resta 1 a un renglón (solo artículos por cantidad). */
+  cambiarCantidad(linea: LineaVale, cambio: number): void {
+    if (cambio > 0) {
+      const a = this.almacen.catalogo().find((x) => x.codigo === linea.codigo);
+      if (a) this.agregar(a);
+      return;
+    }
+    if (linea.cantidad <= 1) {
+      this.quitar(linea);
+      return;
+    }
+    this.carrito.update((lista) => lista.map((l) => (l === linea ? { ...l, cantidad: l.cantidad - 1 } : l)));
+  }
+
+  quitar(linea: LineaVale): void {
+    this.carrito.update((lista) => lista.filter((l) => l !== linea));
+  }
+
+  /* ---------- Autorización de supervisor ---------- */
+
+  autorizar(): void {
+    const p = this.pendiente();
+    if (!p) return;
+    if (!this.supervisorNombre().trim() || this.supervisorPin() !== PIN_SUPERVISOR) {
+      this.avisar('Nombre o PIN de supervisor incorrecto.', 'alerta');
+      return;
+    }
+    this.autorizoSupervisor.set(this.supervisorNombre().trim());
+    this.autorizados.update((l) => [...l, p.articulo.codigo]);
+    this.pendiente.set(null);
+    this.supervisorPin.set('');
+    this.agregar(p.articulo, p.serie); // se vuelve a intentar, ahora autorizado
+  }
+
+  cancelarAutorizacion(): void {
+    this.pendiente.set(null);
+    this.supervisorPin.set('');
+  }
+
+  /* =====================================================
+     NAVEGACIÓN ENTRE PASOS
+  ===================================================== */
+
+  siguiente(): void {
+    if (this.falta()) {
+      this.avisar(this.falta(), 'alerta');
+      return;
+    }
+    if (this.paso() === 3) {
+      this.emitirVale();
+      return;
+    }
+    this.paso.update((p) => p + 1);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  anterior(): void {
+    if (this.paso() > 1) this.paso.update((p) => p - 1);
+  }
+
+  /** Crea el vale con todos los datos, lo guarda y muestra el paso 4. */
+  private emitirVale(): void {
+    const vale: Vale = {
+      folio: this.almacen.siguienteFolio(),
+      fecha: new Date().toISOString(),
+      fechaDevolucion: this.fechaDevolucion(),
+      almacen: this.almacenElegido(),
+      almacenista: this.almacenista,
+      empleado: {
+        nombre: this.nombre().trim(),
+        numeroEmpleado: this.numeroEmpleado().trim(),
+        actividad: this.actividad().trim(),
+        motivo: this.motivo().trim(),
+      },
+      lineas: this.carrito(),
+      firma: this.firma(),
+      autorizoSupervisor: this.autorizoSupervisor() || undefined,
+    };
+    this.almacen.registrarVale(vale);
+    this.valeActual.set(vale);
+    this.paso.set(4);
+    this.avisar(`Vale ${vale.folio} generado.`, 'ok');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  /** Limpia todo para atender al siguiente trabajador. */
+  nuevoVale(): void {
+    this.carrito.set([]);
+    this.nombre.set('');
+    this.numeroEmpleado.set('');
+    this.actividad.set('');
+    this.motivo.set('');
+    this.fechaDevolucion.set(this.fechaISO(this.sumarDias(new Date(), 7)));
+    this.firma.set('');
+    this.autorizados.set([]);
+    this.autorizoSupervisor.set('');
+    this.supervisorNombre.set('');
+    this.valeActual.set(null);
+    this.vista.set('nuevo');
+    this.paso.set(1);
+  }
+
+  /** Abre un vale ya emitido desde el historial. */
+  verVale(v: Vale): void {
+    this.valeActual.set(v);
+    this.vista.set('nuevo');
+    this.paso.set(4);
+  }
+
+  /** Abre el diálogo de impresión del navegador (desde ahí se puede "Guardar como PDF"). */
+  imprimir(): void {
+    window.print();
+  }
+
+  /* =====================================================
+     UTILIDADES
+  ===================================================== */
+
+  private temporizador?: ReturnType<typeof setTimeout>;
+
+  /** Muestra un aviso que se oculta solo después de 3.5 s. */
+  avisar(texto: string, tipo: 'ok' | 'alerta'): void {
+    this.aviso.set({ texto, tipo });
+    clearTimeout(this.temporizador);
+    this.temporizador = setTimeout(() => this.aviso.set(null), 3500);
+  }
+
+  /** Quita acentos y pasa a minúsculas para que "flexometro" encuentre "Flexómetro". */
+  private normalizar(t: string): string {
+    return t.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+  }
+
+  private sumarDias(f: Date, dias: number): Date {
+    const r = new Date(f);
+    r.setDate(r.getDate() + dias);
+    return r;
+  }
+
+  /** Date → 'AAAA-MM-DD' en hora local (toISOString usaría hora UTC y podría dar el día siguiente). */
+  private fechaISO(f: Date): string {
+    const m = String(f.getMonth() + 1).padStart(2, '0');
+    const d = String(f.getDate()).padStart(2, '0');
+    return `${f.getFullYear()}-${m}-${d}`;
+  }
+
+  /** Para leer el valor de un input en el template: valor($event) */
+  valor(e: Event): string {
+    return (e.target as HTMLInputElement).value;
+  }
+}

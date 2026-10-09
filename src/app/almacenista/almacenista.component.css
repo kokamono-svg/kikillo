@@ -1,0 +1,23 @@
+/* @reference permite usar @apply con las clases de Tailwind dentro de este archivo
+   sin volver a generar todo Tailwind (eso haría el CSS enorme). */
+@reference "tailwindcss";
+
+:host {
+  display: block;
+}
+
+/* Estilo común de todos los inputs del formulario (en vez de repetir 15 clases en cada uno).
+   h-11 = 44px de alto: el tamaño mínimo recomendado para tocar con el dedo. */
+.campo {
+  @apply h-11 w-full rounded-xl border border-gray-200 bg-white px-3 text-base text-gray-900 outline-none transition sm:text-sm;
+  @apply focus:border-blue-500 focus:ring-4 focus:ring-blue-500/15;
+  @apply dark:border-white/10 dark:bg-neutral-900 dark:text-white;
+}
+
+/* Al imprimir: tamaño carta con margen */
+@media print {
+  @page {
+    size: letter;
+    margin: 12mm;
+  }
+}
