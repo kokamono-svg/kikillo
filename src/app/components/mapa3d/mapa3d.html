@@ -1,165 +1,231 @@
-
-<div class="dashboard">
-
-  <!-- ENCABEZADO -->
-  <header class="header">
-
-    <div>
-      <h1>Control de Almacenes 3D</h1>
-      <p>Administración de inventario y ubicaciones</p>
+<!-- =====================================================
+     MAPA 3D · red de almacenes y anaqueles
+====================================================== -->
+<div class="space-y-5">
+  <!-- Encabezado -->
+  <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+    <div class="min-w-0">
+      @if (vista() === 'interior' && nodoActual(); as n) {
+        <nav aria-label="Ruta" class="mb-1 flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-400">
+          <button type="button" (click)="volver()" class="font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400">Red de almacenes</button>
+          <svg class="size-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" /></svg>
+          <span class="truncate">{{ n.corto }}</span>
+        </nav>
+        <h1 class="truncate text-2xl font-bold tracking-tight text-gray-900 sm:text-3xl dark:text-white">{{ n.nombre }}</h1>
+        <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Toca un anaquel para ver qué guarda. Cada cajita es una unidad.</p>
+      } @else {
+        <h1 class="text-2xl font-bold tracking-tight text-gray-900 sm:text-3xl dark:text-white">Red de almacenes</h1>
+        <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Kepler surte a Colonia de Contratistas (Mittal), que surte a los 4 almacenes de área.</p>
+      }
     </div>
-
     @if (vista() === 'interior') {
-      <button class="btn-volver" (click)="mostrarExterior()">
-        ← Volver al exterior
+      <button
+        type="button"
+        (click)="volver()"
+        class="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-xl border border-gray-300 bg-white px-4 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 dark:border-white/15 dark:bg-neutral-900 dark:text-gray-200 dark:hover:bg-white/5"
+      >
+        <svg class="size-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" /></svg>
+        Ver la red
       </button>
     }
+  </div>
 
-  </header>
+  <div class="grid gap-5 lg:grid-cols-[minmax(0,1fr)_22rem]">
+    <!-- ===== Visor 3D ===== -->
+    <section class="relative h-[58dvh] min-h-88 overflow-hidden rounded-2xl border border-gray-200 bg-slate-100 lg:h-[calc(100dvh-13rem)] lg:min-h-120 dark:border-white/10">
+      <div #contenedor3d class="absolute inset-0 cursor-grab touch-none active:cursor-grabbing"></div>
 
-  <main class="contenido">
-
-    <!-- VISOR 3D -->
-    <section class="visor">
-
-      <div #contenedor3d class="canvas3d"></div>
-
-      <div class="titulo-visor">
+      <!-- Leyenda -->
+      <div class="pointer-events-none absolute top-3 left-3 flex flex-wrap gap-1.5 text-[11px] font-medium text-gray-700">
         @if (vista() === 'exterior') {
-          Vista general de almacenes
+          <span class="inline-flex items-center gap-1.5 rounded-full bg-white/90 px-2.5 py-1 shadow-sm"><span class="size-2.5 rounded-full bg-emerald-400"></span>Flujo de surtido</span>
+          <span class="inline-flex items-center gap-1.5 rounded-full bg-white/90 px-2.5 py-1 shadow-sm"><span class="h-1.5 w-3 rounded-sm bg-green-500"></span>Al día</span>
+          <span class="inline-flex items-center gap-1.5 rounded-full bg-white/90 px-2.5 py-1 shadow-sm"><span class="h-1.5 w-3 rounded-sm bg-amber-500"></span>Stock bajo</span>
+          <span class="inline-flex items-center gap-1.5 rounded-full bg-white/90 px-2.5 py-1 shadow-sm"><span class="h-1.5 w-3 rounded-sm bg-orange-500"></span>Vencidos</span>
         } @else {
-          Interior: {{ almacenSeleccionado()?.nombre }}
+          <span class="inline-flex items-center gap-1.5 rounded-full bg-white/90 px-2.5 py-1 shadow-sm"><span class="size-2.5 rounded-sm" [style.background]="hex(colorTipo.Herramienta)"></span>Herramienta</span>
+          <span class="inline-flex items-center gap-1.5 rounded-full bg-white/90 px-2.5 py-1 shadow-sm"><span class="size-2.5 rounded-sm" [style.background]="hex(colorTipo.EPP)"></span>EPP</span>
+          <span class="inline-flex items-center gap-1.5 rounded-full bg-white/90 px-2.5 py-1 shadow-sm"><span class="size-2.5 rounded-sm" [style.background]="hex(colorTipo.Consumible)"></span>Consumible</span>
+          <span class="inline-flex items-center gap-1.5 rounded-full bg-white/90 px-2.5 py-1 shadow-sm"><span class="size-2.5 rounded-sm border border-gray-400 bg-transparent"></span>Prestada</span>
+          <span class="inline-flex items-center gap-1.5 rounded-full bg-white/90 px-2.5 py-1 shadow-sm"><span class="size-2.5 rounded-sm bg-orange-500"></span>No apta</span>
         }
       </div>
 
-      <div class="controles">
-        <span>🖱️ Arrastrar: girar</span>
-        <span>🔍 Rueda: zoom</span>
-        <span>👆 Clic: seleccionar</span>
+      <!-- Ayuda de controles -->
+      <div class="pointer-events-none absolute right-3 bottom-3 hidden gap-1.5 text-[11px] text-gray-600 sm:flex">
+        <span class="rounded-full bg-white/90 px-2.5 py-1 shadow-sm">Arrastrar: girar</span>
+        <span class="rounded-full bg-white/90 px-2.5 py-1 shadow-sm">Rueda: acercar</span>
+        <span class="rounded-full bg-white/90 px-2.5 py-1 shadow-sm">Clic: abrir</span>
       </div>
-
     </section>
 
-    <!-- PANEL LATERAL -->
-    <aside class="panel">
-
+    <!-- ===== Panel lateral ===== -->
+    <aside class="rounded-2xl border border-gray-200 bg-white p-4 sm:p-5 lg:max-h-[calc(100dvh-13rem)] lg:overflow-y-auto dark:border-white/10 dark:bg-neutral-900">
       @if (vista() === 'exterior') {
+        <!-- Árbol de la red -->
+        <h2 class="text-base font-semibold text-gray-900 dark:text-white">Cómo se surten</h2>
+        <p class="mt-0.5 text-sm text-gray-500 dark:text-gray-400">Toca un almacén para entrar a sus anaqueles.</p>
 
-        <h2>Almacenes</h2>
-        <p>Selecciona un edificio para explorar su interior.</p>
-
-        <div class="lista-almacenes">
-
-          @for (almacen of almacenes; track almacen.id) {
-
-            <button
-              class="tarjeta-almacen"
-              (click)="entrarAlmacen(almacen.id)"
-            >
-
-              <span class="icono-almacen">🏭</span>
-
-              <div>
-                <strong>{{ almacen.nombre }}</strong>
-                <small>{{ almacen.descripcion }}</small>
-                <span class="enlace">Explorar interior →</span>
-              </div>
-
-            </button>
-
+        <ol class="mt-4 space-y-2">
+          @for (n of red(); track n.nombre) {
+            <li [class]="n.rol === 'distribucion' ? 'pl-4' : n.rol === 'area' ? 'pl-8' : ''">
+              <button
+                type="button"
+                (click)="abrir(n.nombre)"
+                [disabled]="!n.acceso"
+                class="group relative flex w-full items-center gap-3 rounded-xl border border-gray-200 p-3 text-left transition enabled:hover:border-blue-300 enabled:hover:bg-blue-50/50 disabled:cursor-not-allowed disabled:opacity-55 dark:border-white/10 dark:enabled:hover:bg-white/5"
+              >
+                @if (n.rol !== 'principal') {
+                  <!-- Conector del árbol -->
+                  <span class="absolute top-1/2 -left-3 h-px w-3 bg-gray-300 dark:bg-white/20" aria-hidden="true"></span>
+                }
+                <span
+                  class="inline-flex size-9 shrink-0 items-center justify-center rounded-lg text-xs font-bold text-white"
+                  [class]="n.rol === 'principal' ? 'bg-blue-700' : n.rol === 'distribucion' ? 'bg-emerald-600' : 'bg-slate-600'"
+                >
+                  {{ n.rol === 'principal' ? 'P' : n.rol === 'distribucion' ? 'D' : 'A' }}
+                </span>
+                <span class="min-w-0 flex-1">
+                  <span class="block truncate text-sm font-semibold text-gray-900 dark:text-white">{{ n.corto }}</span>
+                  @if (n.acceso) {
+                    <span class="block truncate text-xs text-gray-500 dark:text-gray-400">
+                      {{ n.resumen.disponibles }} de {{ n.resumen.unidades }} disponibles
+                    </span>
+                  } @else {
+                    <span class="block text-xs text-gray-400">Sin acceso</span>
+                  }
+                </span>
+                @if (n.acceso && n.resumen.vencidos) {
+                  <span class="shrink-0 rounded-full bg-orange-50 px-2 py-0.5 text-[11px] font-semibold text-orange-700 dark:bg-orange-500/10 dark:text-orange-300">{{ n.resumen.vencidos }} venc.</span>
+                } @else if (n.acceso && n.resumen.stockBajo.length) {
+                  <span class="shrink-0 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">{{ n.resumen.stockBajo.length }} bajo</span>
+                }
+              </button>
+            </li>
           }
+        </ol>
 
-        </div>
-
+        <p class="mt-4 rounded-xl bg-gray-50 px-3 py-2.5 text-xs text-gray-500 dark:bg-white/5 dark:text-gray-400">
+          <strong class="text-gray-700 dark:text-gray-300">P</strong> principal ·
+          <strong class="text-gray-700 dark:text-gray-300">D</strong> distribución (dentro de Mittal) ·
+          <strong class="text-gray-700 dark:text-gray-300">A</strong> almacén de área
+        </p>
       } @else {
-
-        <div class="detalle-almacen">
-
-          <span class="etiqueta">ALMACÉN SELECCIONADO</span>
-
-          <h2>{{ almacenSeleccionado()?.nombre }}</h2>
-
-          <p>{{ almacenSeleccionado()?.descripcion }}</p>
-
-          <div class="resumen">
-            <div>
-              <strong>12</strong>
-              <span>Estanterías</span>
+        <!-- Interior: números, buscador y detalle del anaquel -->
+        @if (nodoActual(); as n) {
+          <div class="grid grid-cols-3 gap-2 text-center">
+            <div class="rounded-xl bg-emerald-50 px-2 py-2.5 dark:bg-emerald-500/10">
+              <p class="text-lg font-bold text-emerald-700 dark:text-emerald-300">{{ n.resumen.disponibles }}</p>
+              <p class="text-[11px] text-emerald-700/80 dark:text-emerald-300/80">Disponibles</p>
             </div>
-
-            <div>
-              <strong>4</strong>
-              <span>Niveles por estantería</span>
+            <div class="rounded-xl bg-blue-50 px-2 py-2.5 dark:bg-blue-500/10">
+              <p class="text-lg font-bold text-blue-700 dark:text-blue-300">{{ n.resumen.prestadas }}</p>
+              <p class="text-[11px] text-blue-700/80 dark:text-blue-300/80">Prestadas</p>
+            </div>
+            <div class="rounded-xl bg-orange-50 px-2 py-2.5 dark:bg-orange-500/10">
+              <p class="text-lg font-bold text-orange-700 dark:text-orange-300">{{ n.resumen.noAptas }}</p>
+              <p class="text-[11px] text-orange-700/80 dark:text-orange-300/80">No aptas</p>
             </div>
           </div>
+        }
 
-          <hr />
+        <!-- Buscador: ¿en qué anaquel está? -->
+        <label class="relative mt-4 block">
+          <span class="sr-only">Buscar herramienta</span>
+          <svg class="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-gray-400" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" /></svg>
+          <input
+            type="search"
+            placeholder="¿Dónde está…? Nombre, código o serie"
+            [value]="busqueda()"
+            (input)="busqueda.set(valor($event))"
+            class="h-10 w-full rounded-xl border border-gray-200 bg-gray-50 pr-3 pl-9 text-base outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/15 sm:text-sm dark:border-white/10 dark:bg-white/5 dark:text-white"
+          />
+        </label>
 
-          <h3>Información de estantería</h3>
+        @if (busqueda()) {
+          <ul class="mt-2 divide-y divide-gray-100 rounded-xl border border-gray-200 dark:divide-white/10 dark:border-white/10">
+            @for (r of resultados(); track r.articulo.codigo) {
+              <li>
+                <button type="button" (click)="elegirAnaquel(r.anaquel, r.articulo.codigo); busqueda.set('')" class="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm transition hover:bg-gray-50 dark:hover:bg-white/5">
+                  <span class="min-w-0 truncate text-gray-800 dark:text-gray-200">{{ r.articulo.nombre }}</span>
+                  <span class="shrink-0 rounded-md bg-gray-900 px-1.5 py-0.5 font-mono text-[11px] font-bold text-white">{{ r.anaquel }}</span>
+                </button>
+              </li>
+            } @empty {
+              <li class="px-3 py-3 text-center text-sm text-gray-500">No está en este almacén.</li>
+            }
+          </ul>
+        }
 
-          @if (estanteriaSeleccionada(); as estanteria) {
-
-            <div class="informacion-estanteria">
-
-              <div class="codigo">
-                <span>Ubicación</span>
-                <h2>{{ estanteria.id }}</h2>
-              </div>
-
-              <div class="fila-dato">
-                <span>Capacidad total</span>
-                <strong>{{ estanteria.capacidad }}</strong>
-              </div>
-
-              <div class="fila-dato">
-                <span>Artículos almacenados</span>
-                <strong>{{ estanteria.ocupados }}</strong>
-              </div>
-
-              <div class="fila-dato">
-                <span>Artículos prestados</span>
-                <strong>{{ estanteria.prestados }}</strong>
-              </div>
-
-              <div class="fila-dato">
-                <span>Espacios disponibles</span>
-                <strong>
-                  {{ estanteria.capacidad - estanteria.ocupados }}
-                </strong>
-              </div>
-
-              <div class="barra-ocupacion">
-                <div
-                  [style.width.%]="
-                    estanteria.ocupados / estanteria.capacidad * 100
-                  "
-                ></div>
-              </div>
-
-              <small>
-                Ocupación:
-                {{
-                  estanteria.ocupados / estanteria.capacidad * 100
-                }}%
-              </small>
-
+        @if (anaquelActual(); as an) {
+          <!-- Detalle del anaquel elegido -->
+          <div class="mt-5 flex items-center justify-between gap-3">
+            <div>
+              <p class="text-xs font-semibold tracking-wide text-gray-500 uppercase">Anaquel · {{ an.tipo }}</p>
+              <p class="font-mono text-2xl font-bold text-gray-900 dark:text-white">{{ an.codigo }}</p>
             </div>
-
-          } @else {
-
-            <div class="mensaje">
-              📦 Selecciona una estantería del modelo 3D
-              para consultar su información.
-            </div>
-
-          }
-
-        </div>
-
+            <button type="button" (click)="elegirAnaquel(null)" class="text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400">Ver todos</button>
+          </div>
+          <ul class="mt-3 space-y-2">
+            @for (a of an.articulos; track a.codigo; let nivel = $index) {
+              <li>
+                <button
+                  type="button"
+                  (click)="elegirAnaquel(an.codigo, a.codigo)"
+                  class="w-full rounded-xl border p-3 text-left transition"
+                  [class]="articuloSel() === a.codigo ? 'border-amber-400 bg-amber-50 ring-2 ring-amber-300/50 dark:bg-amber-500/10' : 'border-gray-200 hover:border-gray-300 dark:border-white/10'"
+                >
+                  <div class="flex items-start justify-between gap-2">
+                    <div class="min-w-0">
+                      <p class="truncate text-sm font-semibold text-gray-900 dark:text-white">{{ a.nombre }}</p>
+                      <p class="font-mono text-[11px] text-gray-500">{{ a.codigo }} · nivel {{ nivel + 1 }}</p>
+                    </div>
+                    @if (a.costoso) {
+                      <span class="shrink-0 rounded-full bg-violet-50 px-2 py-0.5 text-[10px] font-semibold text-violet-700 dark:bg-violet-500/10 dark:text-violet-300">Alto valor</span>
+                    }
+                  </div>
+                  <div class="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs">
+                    <span class="inline-flex gap-1"><strong class="text-emerald-600 dark:text-emerald-400">{{ disponibles(a) }}</strong><span class="text-gray-500">disponibles</span></span>
+                    <span class="inline-flex gap-1"><strong class="text-blue-600 dark:text-blue-400">{{ prestadas(a) }}</strong><span class="text-gray-500">prestadas</span></span>
+                    @if (noAptas(a)) {
+                      <span class="inline-flex gap-1"><strong class="text-orange-600 dark:text-orange-400">{{ noAptas(a) }}</strong><span class="text-gray-500">no aptas</span></span>
+                    }
+                  </div>
+                  @if (a.piezas) {
+                    <div class="mt-2 flex flex-wrap gap-1">
+                      @for (p of a.piezas; track p.serie) {
+                        <span
+                          class="rounded-md border px-1.5 py-0.5 font-mono text-[10px]"
+                          [class]="p.estado === 'no apto' ? 'border-orange-300 bg-orange-50 text-orange-700 line-through' : p.prestada ? 'border-blue-200 bg-blue-50 text-blue-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700'"
+                          [title]="p.estado === 'no apto' ? 'No apta' : p.prestada ? 'Prestada' : 'Disponible'"
+                        >{{ p.serie }}</span>
+                      }
+                    </div>
+                  }
+                </button>
+              </li>
+            }
+          </ul>
+        } @else if (!busqueda()) {
+          <!-- Lista de anaqueles -->
+          <p class="mt-5 mb-2 text-xs font-semibold tracking-wide text-gray-500 uppercase">Anaqueles</p>
+          <ul class="grid grid-cols-2 gap-2">
+            @for (an of anaqueles(); track an.codigo) {
+              <li>
+                <button type="button" (click)="elegirAnaquel(an.codigo)" class="w-full rounded-xl border border-gray-200 p-2.5 text-left transition hover:border-blue-300 hover:bg-blue-50/50 dark:border-white/10 dark:hover:bg-white/5">
+                  <span class="flex items-center gap-1.5">
+                    <span class="size-2.5 rounded-sm" [style.background]="hex(colorTipo[an.tipo])"></span>
+                    <span class="font-mono text-sm font-bold text-gray-900 dark:text-white">{{ an.codigo }}</span>
+                  </span>
+                  <span class="mt-0.5 block truncate text-xs text-gray-500 dark:text-gray-400">{{ an.articulos[0].nombre }}{{ an.articulos.length > 1 ? ' y ' + (an.articulos.length - 1) + ' más' : '' }}</span>
+                </button>
+              </li>
+            } @empty {
+              <li class="col-span-2 rounded-xl bg-gray-50 px-3 py-6 text-center text-sm text-gray-500 dark:bg-white/5">Este almacén no tiene artículos.</li>
+            }
+          </ul>
+        }
       }
-
     </aside>
-
-  </main>
-
+  </div>
 </div>

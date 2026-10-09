@@ -1,0 +1,235 @@
+<!-- =====================================================
+     MARCO DE LOS MÓDULOS
+     Computadora: menú lateral fijo + barra superior.
+     Celular/tablet: barra superior + pestañas deslizables
+     (el menú completo sigue en la hamburguesa).
+====================================================== -->
+<div class="drawer min-h-dvh bg-slate-50 lg:drawer-open print:block print:bg-white" [class]="claro() ? '' : 'dark:bg-neutral-950'">
+  <!-- Interruptor oculto: en celular, abrir/cerrar el menú -->
+  <input
+    id="menu-panel"
+    type="checkbox"
+    class="drawer-toggle"
+    [checked]="menuAbierto()"
+    (change)="menuAbierto.set($any($event.target).checked)"
+  />
+
+  <!-- =========================
+       CONTENIDO PRINCIPAL
+  ========================== -->
+  <div class="drawer-content flex min-h-dvh min-w-0 flex-col">
+    <div class="sticky top-0 z-30 print:hidden">
+      <!-- ===== Barra superior ===== -->
+      <header
+        class="flex h-16 items-center gap-2 border-b border-gray-200/80 bg-white/85 px-3 backdrop-blur-md sm:gap-3 sm:px-4 md:px-6"
+        [class]="claro() ? '' : 'dark:border-white/10 dark:bg-neutral-950/85'"
+      >
+        <!-- Botón hamburguesa (solo celular y tablet) -->
+        <label
+          for="menu-panel"
+          aria-label="Abrir menú"
+          class="inline-flex size-10 shrink-0 cursor-pointer items-center justify-center rounded-xl text-gray-700 transition hover:bg-gray-100 active:scale-95 lg:hidden dark:text-gray-300 dark:hover:bg-white/10"
+        >
+          <svg class="size-6" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+          </svg>
+        </label>
+
+        <!-- Lo que cada módulo quiera poner (selector de almacén, título...) -->
+        <div class="flex min-w-0 flex-1 items-center gap-3">
+          <ng-content select="[encabezado]" />
+        </div>
+
+        <!-- Menú del usuario: nombre, rol y cerrar sesión (siempre a la mano, también en celular) -->
+        <div class="dropdown dropdown-end shrink-0">
+          <div
+            tabindex="0"
+            role="button"
+            aria-label="Menú de usuario"
+            class="flex items-center gap-2 rounded-full p-1 transition hover:bg-gray-100 sm:pr-3"
+            [class]="claro() ? '' : 'dark:hover:bg-white/10'"
+          >
+            <span class="inline-flex size-9 items-center justify-center rounded-full bg-linear-to-br from-blue-500 to-blue-700 text-sm font-semibold text-white shadow-sm">
+              {{ iniciales() }}
+            </span>
+            <span class="hidden max-w-40 text-left leading-tight md:block">
+              <span class="block truncate text-sm font-medium text-gray-900" [class]="claro() ? '' : 'dark:text-white'">{{ auth.usuario()?.nombre }}</span>
+              <span class="block truncate text-xs text-gray-500" [class]="claro() ? '' : 'dark:text-gray-400'">{{ etiqueta() }}</span>
+            </span>
+            <svg class="hidden size-4 text-gray-400 md:block" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+            </svg>
+          </div>
+          <div
+            tabindex="0"
+            class="dropdown-content z-50 mt-2 w-64 rounded-2xl border border-gray-200 bg-white p-2 shadow-xl shadow-gray-900/10"
+            [class]="claro() ? '' : 'dark:border-white/10 dark:bg-neutral-900'"
+          >
+            <div class="px-3 py-2.5">
+              <p class="truncate text-sm font-semibold text-gray-900" [class]="claro() ? '' : 'dark:text-white'">{{ auth.usuario()?.nombre }}</p>
+              <p class="truncate text-xs text-gray-500" [class]="claro() ? '' : 'dark:text-gray-400'">{{ etiqueta() }}</p>
+            </div>
+            <div class="my-1 h-px bg-gray-100" [class]="claro() ? '' : 'dark:bg-white/10'"></div>
+            <button
+              type="button"
+              (click)="auth.cerrarSesion()"
+              class="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-red-600 transition hover:bg-red-50"
+              [class]="claro() ? '' : 'dark:text-red-400 dark:hover:bg-red-500/10'"
+            >
+              <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" [attr.d]="iconos.salir" />
+              </svg>
+              Cerrar sesión
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <!-- ===== Pestañas de sección (celular y tablet) ===== -->
+      @if (menu().length > 1) {
+        <nav
+          [attr.aria-label]="titulo()"
+          class="sin-barra flex gap-1.5 overflow-x-auto border-b border-gray-200/80 bg-white/85 px-3 py-2 backdrop-blur-md sm:px-4 lg:hidden"
+          [class]="claro() ? '' : 'dark:border-white/10 dark:bg-neutral-950/85'"
+        >
+          @for (m of menu(); track m.ruta) {
+            <a
+              [routerLink]="m.ruta"
+              routerLinkActive="bg-blue-600! text-white! shadow-sm shadow-blue-600/25"
+              [routerLinkActiveOptions]="{ exact: !!m.exacto }"
+              #pestana="routerLinkActive"
+              [attr.data-pestana-activa]="pestana.isActive"
+              [attr.aria-current]="pestana.isActive ? 'page' : null"
+              class="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-sm font-medium whitespace-nowrap text-gray-600 transition hover:bg-gray-100 active:scale-95"
+              [class]="claro() ? '' : 'dark:text-gray-300 dark:hover:bg-white/10'"
+            >
+              <svg class="size-4" fill="none" viewBox="0 0 24 24" stroke-width="1.75" stroke="currentColor" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" [attr.d]="m.icono" />
+              </svg>
+              {{ m.texto }}
+              @if (m.globo) {
+                <span class="rounded-full bg-orange-500 px-1.5 text-[11px] leading-5 font-semibold text-white">{{ m.globo }}</span>
+              }
+            </a>
+          }
+        </nav>
+      }
+    </div>
+
+    <!-- ===== Contenido de la sección ===== -->
+    <main class="mx-auto w-full max-w-(--breakpoint-2xl) flex-1 px-4 pt-5 pb-10 sm:px-6 md:pt-6 lg:px-8 print:max-w-none print:p-0">
+      <ng-content />
+    </main>
+  </div>
+
+  <!-- =========================
+       MENÚ LATERAL (negro)
+  ========================== -->
+  <div class="drawer-side z-40 print:hidden">
+    <!-- Fondo oscuro que cierra el menú al tocar fuera (celular) -->
+    <label for="menu-panel" aria-label="Cerrar menú" class="drawer-overlay"></label>
+
+    <aside class="flex min-h-full w-72 flex-col bg-black text-gray-300">
+      <!-- Marca -->
+      <div class="flex items-center gap-3 px-5 pt-6 pb-5">
+        <img src="images/logo.jpg" alt="" class="size-11 shrink-0 rounded-xl bg-white object-contain p-0.5 ring-1 ring-white/20" />
+        <div class="min-w-0 leading-tight">
+          <p class="text-base font-bold tracking-wide text-white">IMHOTEP</p>
+          <p class="truncate text-xs text-gray-400">Control de almacenes</p>
+        </div>
+        <!-- Cerrar (solo celular) -->
+        <label
+          for="menu-panel"
+          aria-label="Cerrar menú"
+          class="ml-auto inline-flex size-9 cursor-pointer items-center justify-center rounded-lg text-gray-400 transition hover:bg-white/10 hover:text-white lg:hidden"
+        >
+          <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </label>
+      </div>
+
+      <!-- Navegación -->
+      <nav [attr.aria-label]="titulo()" class="flex-1 overflow-y-auto px-3">
+        <p class="px-4 pt-2 pb-2 text-[11px] font-semibold tracking-wider text-gray-500 uppercase">{{ titulo() }}</p>
+        <ul class="space-y-1">
+          @for (m of menu(); track m.ruta) {
+            <li>
+              <a
+                [routerLink]="m.ruta"
+                routerLinkActive="bg-white/10 text-white"
+                [routerLinkActiveOptions]="{ exact: !!m.exacto }"
+                #rla="routerLinkActive"
+                [attr.aria-current]="rla.isActive ? 'page' : null"
+                (click)="menuAbierto.set(false)"
+                class="relative flex items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-medium transition hover:bg-white/5 hover:text-white"
+              >
+                @if (rla.isActive) {
+                  <span class="absolute top-2 bottom-2 left-0 w-1 rounded-r-full bg-emerald-400"></span>
+                }
+                <svg
+                  class="size-5 shrink-0"
+                  [class.text-emerald-400]="rla.isActive"
+                  fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true"
+                >
+                  <path stroke-linecap="round" stroke-linejoin="round" [attr.d]="m.icono" />
+                </svg>
+                <span class="truncate">{{ m.texto }}</span>
+                @if (m.globo) {
+                  <span class="ml-auto rounded-full bg-orange-400/15 px-2 py-0.5 text-xs font-semibold text-orange-300">{{ m.globo }}</span>
+                }
+              </a>
+            </li>
+          }
+        </ul>
+
+        @if (otrosModulos().length) {
+          <p class="mt-6 px-4 pb-2 text-[11px] font-semibold tracking-wider text-gray-500 uppercase">Otros módulos</p>
+          <ul class="space-y-1">
+            @for (m of otrosModulos(); track m.ruta) {
+              <li>
+                <a
+                  [routerLink]="m.ruta"
+                  (click)="menuAbierto.set(false)"
+                  class="flex items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-medium transition hover:bg-white/5 hover:text-white"
+                >
+                  <svg class="size-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" [attr.d]="m.icono" />
+                  </svg>
+                  {{ m.texto }}
+                  <svg class="ml-auto size-4 text-gray-600" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+                  </svg>
+                </a>
+              </li>
+            }
+          </ul>
+        }
+      </nav>
+
+      <!-- Usuario y cerrar sesión -->
+      <div class="m-3 rounded-2xl bg-white/5 p-3 ring-1 ring-white/10">
+        <div class="flex items-center gap-3">
+          <span class="inline-flex size-10 shrink-0 items-center justify-center rounded-full bg-linear-to-br from-emerald-400 to-emerald-600 text-sm font-semibold text-white">
+            {{ iniciales() }}
+          </span>
+          <div class="min-w-0 flex-1">
+            <p class="truncate text-sm font-medium text-white">{{ auth.usuario()?.nombre }}</p>
+            <p class="truncate text-xs text-gray-400">{{ etiqueta() }}</p>
+          </div>
+          <button
+            type="button"
+            (click)="auth.cerrarSesion()"
+            aria-label="Cerrar sesión"
+            title="Cerrar sesión"
+            class="inline-flex size-9 shrink-0 items-center justify-center rounded-lg text-gray-400 transition hover:bg-red-500/15 hover:text-red-300"
+          >
+            <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" [attr.d]="iconos.salir" />
+            </svg>
+          </button>
+        </div>
+      </div>
+    </aside>
+  </div>
+</div>

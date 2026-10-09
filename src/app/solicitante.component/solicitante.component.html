@@ -80,9 +80,10 @@
           <p class="text-sm leading-tight font-medium">{{ trabajador.nombre }}</p>
           <p class="text-xs text-gray-400">{{ trabajador.puesto }}</p>
         </div>
-        <div class="size-10 overflow-hidden rounded-full ring-2 ring-emerald-400/40">
-          <img src="./images/user/owner.png" alt="" class="size-full object-cover" />
-        </div>
+        <span class="inline-flex size-10 items-center justify-center rounded-full bg-linear-to-br from-emerald-400 to-emerald-600 text-sm font-semibold text-white" aria-hidden="true">
+          {{ iniciales }}
+        </span>
+        <app-cerrar-sesion />
       </div>
     </div>
   </header>

@@ -1,551 +1,243 @@
 <!-- =====================================================
-     DASHBOARD - CONTROL DE ALMACÉN
+     PANEL GENERAL (administrador)
      Colores: azul (acción), verde (disponible), negro (menú),
-     naranja sutil (alertas: stock bajo y vencidos)
+     naranja (alertas: stock bajo y vencidos)
 ====================================================== -->
+<app-panel-layout modulo="panel" titulo="Panel general" [menu]="menu" etiqueta="Administrador">
+  <div encabezado class="min-w-0">
+    <p class="truncate text-sm font-semibold text-gray-900 dark:text-white">Panel general</p>
+    <p class="truncate text-xs text-gray-500 first-letter:uppercase dark:text-gray-400">{{ hoy | date: "EEEE d 'de' MMMM" }}</p>
+  </div>
 
-<!-- ===== Layout: menú lateral + contenido (DaisyUI drawer, sin JavaScript) ===== -->
-<div class="drawer  bg-slate-50 lg:drawer-open dark:bg-neutral-950">
-  <!-- Interruptor oculto: en celular, abrir/cerrar el menú -->
-  <input id="menu-lateral" type="checkbox" class="drawer-toggle" />
-
-  <!-- =========================
-       CONTENIDO PRINCIPAL
-  ========================== -->
-  <div class="drawer-content flex min-h-screen flex-col">
-
-    <!-- ===== Barra superior ===== -->
-    <header
-      class="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-gray-200 bg-white/80 px-4 backdrop-blur md:px-6 dark:border-white/10 dark:bg-neutral-950/80"
-    >
-      <!-- Botón hamburguesa (solo celular y tablet) -->
-      <label
-        for="menu-lateral"
-        aria-label="Abrir menú"
-        class="inline-flex size-10 cursor-pointer items-center justify-center rounded-xl text-gray-700 transition hover:bg-gray-100 lg:hidden dark:text-gray-300 dark:hover:bg-white/10"
+  <div class="space-y-6">
+    <!-- ===== Saludo y acción principal ===== -->
+    <div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+      <div>
+        <h1 class="text-2xl font-bold tracking-tight text-gray-900 sm:text-3xl dark:text-white">
+          {{ saludo }}, {{ nombreCorto() }}
+        </h1>
+        <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+          Así van los {{ resumenes().length }} almacenes y el personal hoy.
+        </p>
+      </div>
+      <a
+        routerLink="/almacen/nuevo"
+        class="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 text-sm font-semibold text-white shadow-lg shadow-blue-600/25 transition hover:-translate-y-0.5 hover:bg-blue-700 active:translate-y-0"
       >
-        <svg class="size-6" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+        <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
         </svg>
-      </label>
+        Registrar préstamo
+      </a>
+    </div>
 
-      <!-- Buscador -->
-      <div class="relative max-w-md flex-1">
-        <svg
-          class="pointer-events-none absolute top-1/2 left-3.5 size-5 -translate-y-1/2 text-gray-400"
-          fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"
-        >
-          <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
-        </svg>
-        <input
-          type="search"
-          placeholder="Buscar herramienta, equipo o código"
-          class="h-10 w-full rounded-xl border border-gray-200 bg-gray-50 pr-4 pl-11 text-sm text-gray-800 placeholder:text-gray-400 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/15 dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder:text-white/30 dark:focus:bg-neutral-900"
-        />
+    <!-- ===== Indicadores (cada uno lleva a su detalle) ===== -->
+    <section aria-label="Resumen" class="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
+      <a routerLink="/almacen/inventario" class="group rounded-2xl border border-gray-200 bg-white p-4 transition hover:-translate-y-0.5 hover:border-emerald-300 hover:shadow-lg hover:shadow-emerald-500/5 sm:p-5 dark:border-white/10 dark:bg-neutral-900">
+        <div class="flex items-center justify-between">
+          <span class="inline-flex size-9 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400">
+            <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" [attr.d]="iconos.check" /></svg>
+          </span>
+          <svg class="size-4 text-gray-300 transition group-hover:translate-x-0.5 group-hover:text-emerald-500" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" /></svg>
+        </div>
+        <p class="mt-3 text-2xl font-bold text-gray-900 sm:text-3xl dark:text-white">{{ total().disponibles }}</p>
+        <p class="text-sm text-gray-500 dark:text-gray-400">Disponibles</p>
+        <p class="mt-1 text-xs text-emerald-600 dark:text-emerald-400">{{ porcentaje(total().disponibles, total().unidades) }}% del total</p>
+      </a>
+
+      <a routerLink="/almacen/prestamos" class="group rounded-2xl border border-gray-200 bg-white p-4 transition hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-lg hover:shadow-blue-500/5 sm:p-5 dark:border-white/10 dark:bg-neutral-900">
+        <div class="flex items-center justify-between">
+          <span class="inline-flex size-9 items-center justify-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400">
+            <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" [attr.d]="iconos.flechas" /></svg>
+          </span>
+          <svg class="size-4 text-gray-300 transition group-hover:translate-x-0.5 group-hover:text-blue-500" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" /></svg>
+        </div>
+        <p class="mt-3 text-2xl font-bold text-gray-900 sm:text-3xl dark:text-white">{{ total().prestadas }}</p>
+        <p class="text-sm text-gray-500 dark:text-gray-400">Prestadas ahora</p>
+        <p class="mt-1 text-xs text-blue-600 dark:text-blue-400">En manos del personal</p>
+      </a>
+
+      <a routerLink="/almacen/prestamos" class="group rounded-2xl border bg-white p-4 transition hover:-translate-y-0.5 hover:shadow-lg sm:p-5 dark:bg-neutral-900"
+        [class]="total().vencidos ? 'border-orange-200 hover:border-orange-300 hover:shadow-orange-500/10 dark:border-orange-500/30' : 'border-gray-200 hover:border-gray-300 dark:border-white/10'">
+        <div class="flex items-center justify-between">
+          <span class="inline-flex size-9 items-center justify-center rounded-xl bg-orange-50 text-orange-500 dark:bg-orange-500/10 dark:text-orange-400">
+            <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" [attr.d]="iconos.reloj" /></svg>
+          </span>
+          <svg class="size-4 text-gray-300 transition group-hover:translate-x-0.5 group-hover:text-orange-500" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" /></svg>
+        </div>
+        <p class="mt-3 text-2xl font-bold sm:text-3xl" [class]="total().vencidos ? 'text-orange-600 dark:text-orange-400' : 'text-gray-900 dark:text-white'">{{ total().vencidos }}</p>
+        <p class="text-sm text-gray-500 dark:text-gray-400">Vencidos</p>
+        <p class="mt-1 text-xs text-orange-600 dark:text-orange-400">{{ total().vencidos ? 'Pasaron su fecha de entrega' : 'Todo en tiempo' }}</p>
+      </a>
+
+      <a routerLink="/rh" class="group rounded-2xl border border-gray-200 bg-white p-4 transition hover:-translate-y-0.5 hover:border-violet-300 hover:shadow-lg hover:shadow-violet-500/5 sm:p-5 dark:border-white/10 dark:bg-neutral-900">
+        <div class="flex items-center justify-between">
+          <span class="inline-flex size-9 items-center justify-center rounded-xl bg-violet-50 text-violet-600 dark:bg-violet-500/10 dark:text-violet-400">
+            <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" [attr.d]="iconos.personas" /></svg>
+          </span>
+          <svg class="size-4 text-gray-300 transition group-hover:translate-x-0.5 group-hover:text-violet-500" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" /></svg>
+        </div>
+        <p class="mt-3 text-2xl font-bold text-gray-900 sm:text-3xl dark:text-white">{{ rh()?.activos ?? '—' }}</p>
+        <p class="text-sm text-gray-500 dark:text-gray-400">Personal activo</p>
+        <p class="mt-1 text-xs text-violet-600 dark:text-violet-400">
+          {{ rh() ? rh()!.conAdeudos.length + ' con equipo pendiente' : 'Sin conexión con RH' }}
+        </p>
+      </a>
+    </section>
+
+    <!-- ===== Accesos rápidos ===== -->
+    <section aria-labelledby="t-accesos">
+      <h2 id="t-accesos" class="mb-3 text-sm font-semibold tracking-wide text-gray-500 uppercase dark:text-gray-400">Accesos rápidos</h2>
+      <div class="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
+        @for (a of accesos; track a.ruta) {
+          <a
+            [routerLink]="a.ruta"
+            class="group flex flex-col gap-3 rounded-2xl border border-gray-200 bg-white p-4 transition hover:-translate-y-0.5 hover:border-gray-300 hover:shadow-lg hover:shadow-gray-900/5 active:translate-y-0 sm:flex-row sm:items-center dark:border-white/10 dark:bg-neutral-900"
+          >
+            <span class="inline-flex size-11 shrink-0 items-center justify-center rounded-xl" [class]="a.color">
+              <svg class="size-6" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" [attr.d]="a.icono" /></svg>
+            </span>
+            <span class="min-w-0">
+              <span class="block text-sm font-semibold text-gray-900 dark:text-white">{{ a.texto }}</span>
+              <span class="block text-xs text-gray-500 dark:text-gray-400">{{ a.detalle }}</span>
+            </span>
+          </a>
+        }
       </div>
+    </section>
 
-      <!-- Notificaciones y usuario -->
-      <div class="ml-auto flex items-center gap-2">
-        <button
-          type="button"
-          aria-label="Notificaciones"
-          class="relative inline-flex size-10 items-center justify-center rounded-xl text-gray-600 transition hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-white/10"
-        >
-          <svg class="size-6" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" />
-          </svg>
-          <span class="absolute top-2 right-2.5 size-2 rounded-full bg-orange-400 ring-2 ring-white dark:ring-neutral-950"></span>
-        </button>
-
-        <div class="size-10 overflow-hidden rounded-full ring-2 ring-blue-500/30">
-          <img src="./images/user/owner.png" alt="Usuario" class="size-full object-cover" />
-        </div>
-      </div>
-    </header>
-
-    <!-- ===== Contenido ===== -->
-    <main class="mx-auto w-full max-w-(--breakpoint-2xl) space-y-6 p-4 md:p-6">
-
-      <!-- Título y acción principal -->
-      <div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 class="text-2xl font-bold tracking-tight text-gray-900 sm:text-3xl dark:text-white">
-            Panel de almacén
-          </h1>
-          <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            Stock en tiempo real y préstamos activos de herramientas y equipos.
-          </p>
-        </div>
-
-        <a
-          href="/prestamos/nuevo"
-          class="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 text-sm font-semibold text-white shadow-lg shadow-blue-600/25 transition hover:-translate-y-0.5 hover:bg-blue-700 hover:shadow-xl hover:shadow-blue-600/30 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 active:translate-y-0"
-        >
-          <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-          </svg>
-          Registrar préstamo
-        </a>
-      </div>
-
-      <!-- =========================
-           RESUMEN (4 indicadores en una sola franja)
-      ========================== -->
-      <section
-        aria-label="Resumen"
-        class="grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-gray-200 bg-gray-200 lg:grid-cols-4 dark:border-white/10 dark:bg-white/10"
-      >
-        <!-- Total -->
-        <div class="bg-white p-5 lg:p-6 dark:bg-neutral-900">
-          <div class="mb-4 inline-flex size-10 items-center justify-center rounded-xl bg-neutral-900 text-white dark:bg-white dark:text-neutral-900">
-            <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9" />
-            </svg>
+    <div class="grid gap-6 xl:grid-cols-3">
+      <!-- ===== Almacenes ===== -->
+      <section class="rounded-2xl border border-gray-200 bg-white xl:col-span-2 dark:border-white/10 dark:bg-neutral-900">
+        <div class="flex items-center justify-between gap-4 px-5 pt-5 lg:px-6">
+          <div>
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Almacenes</h2>
+            <p class="mt-0.5 text-sm text-gray-500 dark:text-gray-400">Toca uno para ver su detalle.</p>
           </div>
-          <p class="text-sm text-gray-500 dark:text-gray-400">Equipos registrados</p>
-          <p class="mt-1 text-3xl font-semibold text-gray-900 dark:text-white">312</p>
-          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">En todos los almacenes</p>
+          <a routerLink="/almacen" class="shrink-0 text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400">Ver todos</a>
         </div>
-
-        <!-- Disponibles -->
-        <div class="bg-white p-5 lg:p-6 dark:bg-neutral-900">
-          <div class="mb-4 inline-flex size-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400">
-            <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          </div>
-          <p class="text-sm text-gray-500 dark:text-gray-400">Disponibles</p>
-          <p class="mt-1 text-3xl font-semibold text-gray-900 dark:text-white">241</p>
-          <p class="mt-1 text-xs text-emerald-600 dark:text-emerald-400">Listos para prestar</p>
-        </div>
-
-        <!-- Prestados -->
-        <div class="bg-white p-5 lg:p-6 dark:bg-neutral-900">
-          <div class="mb-4 inline-flex size-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400">
-            <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" />
-            </svg>
-          </div>
-          <p class="text-sm text-gray-500 dark:text-gray-400">Prestados ahora</p>
-          <p class="mt-1 text-3xl font-semibold text-gray-900 dark:text-white">71</p>
-          <p class="mt-1 text-xs text-blue-600 dark:text-blue-400">En manos de personal</p>
-        </div>
-
-        <!-- Vencidos -->
-        <div class="bg-white p-5 lg:p-6 dark:bg-neutral-900">
-          <div class="mb-4 inline-flex size-10 items-center justify-center rounded-xl bg-orange-50 text-orange-500 dark:bg-orange-500/10 dark:text-orange-400">
-            <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          </div>
-          <p class="text-sm text-gray-500 dark:text-gray-400">Devoluciones vencidas</p>
-          <p class="mt-1 text-3xl font-semibold text-gray-900 dark:text-white">7</p>
-          <p class="mt-1 text-xs text-orange-600 dark:text-orange-400">Pasaron su fecha de entrega</p>
-        </div>
+        <ul class="mt-3 divide-y divide-gray-100 dark:divide-white/10">
+          @for (r of resumenes(); track r.almacen) {
+            <li>
+              <button
+                type="button"
+                (click)="verAlmacen(r.almacen)"
+                class="group flex w-full items-center gap-4 px-5 py-3.5 text-left transition hover:bg-gray-50 lg:px-6 dark:hover:bg-white/5"
+              >
+                <div class="min-w-0 flex-1">
+                  <div class="flex items-baseline justify-between gap-3">
+                    <p class="truncate text-sm font-medium text-gray-800 dark:text-gray-200">{{ r.almacen }}</p>
+                    <p class="shrink-0 text-xs text-gray-500 dark:text-gray-400">
+                      <span class="font-semibold text-gray-900 dark:text-white">{{ r.disponibles }}</span> de {{ r.unidades }}
+                    </p>
+                  </div>
+                  <div class="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-gray-100 dark:bg-white/10">
+                    <div
+                      class="h-full rounded-full"
+                      [class]="porcentaje(r.disponibles, r.unidades) >= 70 ? 'bg-emerald-500' : porcentaje(r.disponibles, r.unidades) >= 40 ? 'bg-blue-500' : 'bg-orange-400'"
+                      [style.width.%]="porcentaje(r.disponibles, r.unidades)"
+                    ></div>
+                  </div>
+                </div>
+                <div class="hidden shrink-0 gap-1.5 sm:flex">
+                  @if (r.vencidos) {
+                    <span class="rounded-full bg-orange-50 px-2 py-0.5 text-xs font-medium text-orange-700 dark:bg-orange-500/10 dark:text-orange-300">{{ r.vencidos }} vencido{{ r.vencidos === 1 ? '' : 's' }}</span>
+                  }
+                  @if (r.stockBajo.length) {
+                    <span class="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">{{ r.stockBajo.length }} bajo</span>
+                  }
+                </div>
+                <svg class="size-4 shrink-0 text-gray-300 transition group-hover:translate-x-0.5 group-hover:text-gray-500" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" /></svg>
+              </button>
+            </li>
+          }
+        </ul>
       </section>
 
-      <!-- =========================
-           STOCK POR CATEGORÍA + STOCK BAJO
-      ========================== -->
-      <div class="grid gap-6 xl:grid-cols-3">
-
-        <!-- Disponibilidad por categoría (elemento principal) -->
-        <section class="rounded-2xl border border-gray-200 bg-white p-5 xl:col-span-2 lg:p-6 dark:border-white/10 dark:bg-neutral-900">
-          <div class="mb-6 flex items-start justify-between gap-4">
-            <div>
-              <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Disponibilidad por categoría</h2>
-              <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Unidades disponibles frente al total de cada categoría.</p>
-            </div>
-            <a href="/inventario" class="shrink-0 text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300">
-              Ver inventario
-            </a>
+      <!-- ===== Requiere atención ===== -->
+      <section class="rounded-2xl border border-gray-200 bg-white p-5 lg:p-6 dark:border-white/10 dark:bg-neutral-900">
+        <div class="mb-4 flex items-center gap-3">
+          <span class="inline-flex size-10 shrink-0 items-center justify-center rounded-xl bg-orange-50 text-orange-500 dark:bg-orange-500/10 dark:text-orange-400">
+            <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" [attr.d]="iconos.alerta" /></svg>
+          </span>
+          <div>
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Requiere atención</h2>
+            <p class="text-sm text-gray-500 dark:text-gray-400">Pendientes de hoy</p>
           </div>
-
-          <ul class="space-y-5">
-            <!-- Herramienta manual: 102 de 110 (93%) = verde -->
-            <li>
-              <div class="mb-2 flex items-baseline justify-between gap-3">
-                <span class="text-sm font-medium text-gray-800 dark:text-gray-200">Herramienta manual</span>
-                <span class="text-sm text-gray-500 dark:text-gray-400"><span class="font-semibold text-gray-900 dark:text-white">102</span> de 110</span>
-              </div>
-              <div class="h-2.5 w-full overflow-hidden rounded-full bg-gray-100 dark:bg-white/10">
-                <div class="h-full w-[93%] rounded-full bg-emerald-500"></div>
-              </div>
-            </li>
-
-            <!-- Herramienta eléctrica: 38 de 62 (61%) = azul -->
-            <li>
-              <div class="mb-2 flex items-baseline justify-between gap-3">
-                <span class="text-sm font-medium text-gray-800 dark:text-gray-200">Herramienta eléctrica</span>
-                <span class="text-sm text-gray-500 dark:text-gray-400"><span class="font-semibold text-gray-900 dark:text-white">38</span> de 62</span>
-              </div>
-              <div class="h-2.5 w-full overflow-hidden rounded-full bg-gray-100 dark:bg-white/10">
-                <div class="h-full w-[61%] rounded-full bg-blue-500"></div>
-              </div>
-            </li>
-
-            <!-- Equipo de medición: 11 de 40 (28%) = naranja (stock bajo) -->
-            <li>
-              <div class="mb-2 flex items-baseline justify-between gap-3">
-                <span class="text-sm font-medium text-gray-800 dark:text-gray-200">Equipo de medición</span>
-                <span class="text-sm text-gray-500 dark:text-gray-400"><span class="font-semibold text-orange-600 dark:text-orange-400">11</span> de 40</span>
-              </div>
-              <div class="h-2.5 w-full overflow-hidden rounded-full bg-gray-100 dark:bg-white/10">
-                <div class="h-full w-[28%] rounded-full bg-orange-400"></div>
-              </div>
-            </li>
-
-            <!-- EPP: 74 de 80 (92%) = verde -->
-            <li>
-              <div class="mb-2 flex items-baseline justify-between gap-3">
-                <span class="text-sm font-medium text-gray-800 dark:text-gray-200">Equipo de protección personal</span>
-                <span class="text-sm text-gray-500 dark:text-gray-400"><span class="font-semibold text-gray-900 dark:text-white">74</span> de 80</span>
-              </div>
-              <div class="h-2.5 w-full overflow-hidden rounded-full bg-gray-100 dark:bg-white/10">
-                <div class="h-full w-[92%] rounded-full bg-emerald-500"></div>
-              </div>
-            </li>
-
-            <!-- Equipo de elevación: 16 de 20 (80%) = verde -->
-            <li>
-              <div class="mb-2 flex items-baseline justify-between gap-3">
-                <span class="text-sm font-medium text-gray-800 dark:text-gray-200">Equipo de elevación</span>
-                <span class="text-sm text-gray-500 dark:text-gray-400"><span class="font-semibold text-gray-900 dark:text-white">16</span> de 20</span>
-              </div>
-              <div class="h-2.5 w-full overflow-hidden rounded-full bg-gray-100 dark:bg-white/10">
-                <div class="h-full w-[80%] rounded-full bg-emerald-500"></div>
-              </div>
-            </li>
-          </ul>
-        </section>
-
-        <!-- Stock bajo -->
-        <section class="rounded-2xl border border-gray-200 bg-white p-5 lg:p-6 dark:border-white/10 dark:bg-neutral-900">
-          <div class="mb-5 flex items-center gap-3">
-            <div class="inline-flex size-10 items-center justify-center rounded-xl bg-orange-50 text-orange-500 dark:bg-orange-500/10 dark:text-orange-400">
-              <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.008v.008H12v-.008z" />
-              </svg>
-            </div>
-            <div>
-              <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Stock bajo</h2>
-              <p class="text-sm text-gray-500 dark:text-gray-400">Conviene reponer pronto</p>
-            </div>
-          </div>
-
-          <ul class="divide-y divide-gray-100 dark:divide-white/10">
-            <li class="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0">
-              <div class="min-w-0">
-                <p class="truncate text-sm font-medium text-gray-800 dark:text-gray-200">Multímetro Fluke 117</p>
-                <p class="text-xs text-gray-500 dark:text-gray-400">Equipo de medición</p>
-              </div>
-              <span class="shrink-0 rounded-full bg-orange-50 px-2.5 py-1 text-xs font-medium text-orange-700 dark:bg-orange-500/10 dark:text-orange-300">Quedan 2</span>
-            </li>
-            <li class="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0">
-              <div class="min-w-0">
-                <p class="truncate text-sm font-medium text-gray-800 dark:text-gray-200">Guantes dieléctricos clase 2</p>
-                <p class="text-xs text-gray-500 dark:text-gray-400">Protección personal</p>
-              </div>
-              <span class="shrink-0 rounded-full bg-orange-50 px-2.5 py-1 text-xs font-medium text-orange-700 dark:bg-orange-500/10 dark:text-orange-300">Quedan 4</span>
-            </li>
-            <li class="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0">
-              <div class="min-w-0">
-                <p class="truncate text-sm font-medium text-gray-800 dark:text-gray-200">Arnés de seguridad</p>
-                <p class="text-xs text-gray-500 dark:text-gray-400">Protección personal</p>
-              </div>
-              <span class="shrink-0 rounded-full bg-orange-50 px-2.5 py-1 text-xs font-medium text-orange-700 dark:bg-orange-500/10 dark:text-orange-300">Quedan 3</span>
-            </li>
-            <li class="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0">
-              <div class="min-w-0">
-                <p class="truncate text-sm font-medium text-gray-800 dark:text-gray-200">Llave de torque 1/2"</p>
-                <p class="text-xs text-gray-500 dark:text-gray-400">Herramienta manual</p>
-              </div>
-              <span class="shrink-0 rounded-full bg-orange-50 px-2.5 py-1 text-xs font-medium text-orange-700 dark:bg-orange-500/10 dark:text-orange-300">Quedan 2</span>
-            </li>
-          </ul>
-        </section>
-      </div>
-
-      <!-- =========================
-           PRÉSTAMOS RECIENTES + SOLICITUDES PENDIENTES
-      ========================== -->
-      <div class="grid gap-6 xl:grid-cols-3">
-
-        <!-- Tabla de préstamos -->
-        <section class="overflow-hidden rounded-2xl border border-gray-200 bg-white xl:col-span-2 dark:border-white/10 dark:bg-neutral-900">
-          <div class="flex items-center justify-between gap-4 p-5 lg:p-6">
-            <div>
-              <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Préstamos recientes</h2>
-              <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Quién tiene cada herramienta y cuándo debe devolverla.</p>
-            </div>
-            <a href="/prestamos" class="shrink-0 text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300">
-              Ver todos
-            </a>
-          </div>
-
-          <div class="overflow-x-auto">
-            <table class="w-full min-w-[640px] text-left text-sm">
-              <thead class="border-y border-gray-200 bg-gray-50 text-gray-500 dark:border-white/10 dark:bg-white/5 dark:text-gray-400">
-                <tr>
-                  <th class="px-5 py-3 font-medium lg:px-6">Herramienta o equipo</th>
-                  <th class="px-5 py-3 font-medium">Solicitante</th>
-                  <th class="px-5 py-3 font-medium">Entrega</th>
-                  <th class="px-5 py-3 font-medium">Devolución</th>
-                  <th class="px-5 py-3 font-medium lg:pr-6">Estado</th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-gray-100 dark:divide-white/10">
-
-                <tr class="transition hover:bg-gray-50 dark:hover:bg-white/5">
-                  <td class="px-5 py-3.5 lg:px-6">
-                    <p class="font-medium text-gray-800 dark:text-gray-200">Taladro percutor Bosch</p>
-                    <p class="text-xs text-gray-500 dark:text-gray-400">HE-0142</p>
-                  </td>
-                  <td class="px-5 py-3.5">
-                    <div class="flex items-center gap-2.5">
-                      <span class="inline-flex size-8 items-center justify-center rounded-full bg-blue-50 text-xs font-semibold text-blue-700 dark:bg-blue-500/10 dark:text-blue-300">CM</span>
-                      <span class="text-gray-700 dark:text-gray-300">Carlos Mendoza</span>
-                    </div>
-                  </td>
-                  <td class="px-5 py-3.5 text-gray-600 dark:text-gray-400">30 sep</td>
-                  <td class="px-5 py-3.5 text-gray-600 dark:text-gray-400">03 oct</td>
-                  <td class="px-5 py-3.5 lg:pr-6">
-                    <span class="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 dark:bg-blue-500/10 dark:text-blue-300">
-                      <span class="size-1.5 rounded-full bg-blue-500"></span>Prestado
-                    </span>
-                  </td>
-                </tr>
-
-                <tr class="transition hover:bg-gray-50 dark:hover:bg-white/5">
-                  <td class="px-5 py-3.5 lg:px-6">
-                    <p class="font-medium text-gray-800 dark:text-gray-200">Multímetro Fluke 117</p>
-                    <p class="text-xs text-gray-500 dark:text-gray-400">EM-0031</p>
-                  </td>
-                  <td class="px-5 py-3.5">
-                    <div class="flex items-center gap-2.5">
-                      <span class="inline-flex size-8 items-center justify-center rounded-full bg-blue-50 text-xs font-semibold text-blue-700 dark:bg-blue-500/10 dark:text-blue-300">LR</span>
-                      <span class="text-gray-700 dark:text-gray-300">Laura Ríos</span>
-                    </div>
-                  </td>
-                  <td class="px-5 py-3.5 text-gray-600 dark:text-gray-400">28 sep</td>
-                  <td class="px-5 py-3.5 font-medium text-orange-600 dark:text-orange-400">01 oct</td>
-                  <td class="px-5 py-3.5 lg:pr-6">
-                    <span class="inline-flex items-center gap-1.5 rounded-full bg-orange-50 px-2.5 py-1 text-xs font-medium text-orange-700 dark:bg-orange-500/10 dark:text-orange-300">
-                      <span class="size-1.5 rounded-full bg-orange-400"></span>Vencido
-                    </span>
-                  </td>
-                </tr>
-
-                <tr class="transition hover:bg-gray-50 dark:hover:bg-white/5">
-                  <td class="px-5 py-3.5 lg:px-6">
-                    <p class="font-medium text-gray-800 dark:text-gray-200">Llave de torque 1/2"</p>
-                    <p class="text-xs text-gray-500 dark:text-gray-400">HM-0207</p>
-                  </td>
-                  <td class="px-5 py-3.5">
-                    <div class="flex items-center gap-2.5">
-                      <span class="inline-flex size-8 items-center justify-center rounded-full bg-blue-50 text-xs font-semibold text-blue-700 dark:bg-blue-500/10 dark:text-blue-300">JS</span>
-                      <span class="text-gray-700 dark:text-gray-300">Jorge Salinas</span>
-                    </div>
-                  </td>
-                  <td class="px-5 py-3.5 text-gray-600 dark:text-gray-400">27 sep</td>
-                  <td class="px-5 py-3.5 text-gray-600 dark:text-gray-400">30 sep</td>
-                  <td class="px-5 py-3.5 lg:pr-6">
-                    <span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">
-                      <span class="size-1.5 rounded-full bg-emerald-500"></span>Devuelto
-                    </span>
-                  </td>
-                </tr>
-
-                <tr class="transition hover:bg-gray-50 dark:hover:bg-white/5">
-                  <td class="px-5 py-3.5 lg:px-6">
-                    <p class="font-medium text-gray-800 dark:text-gray-200">Esmeriladora angular 4 1/2"</p>
-                    <p class="text-xs text-gray-500 dark:text-gray-400">HE-0088</p>
-                  </td>
-                  <td class="px-5 py-3.5">
-                    <div class="flex items-center gap-2.5">
-                      <span class="inline-flex size-8 items-center justify-center rounded-full bg-blue-50 text-xs font-semibold text-blue-700 dark:bg-blue-500/10 dark:text-blue-300">AT</span>
-                      <span class="text-gray-700 dark:text-gray-300">Ana Torres</span>
-                    </div>
-                  </td>
-                  <td class="px-5 py-3.5 text-gray-600 dark:text-gray-400">02 oct</td>
-                  <td class="px-5 py-3.5 text-gray-600 dark:text-gray-400">05 oct</td>
-                  <td class="px-5 py-3.5 lg:pr-6">
-                    <span class="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 dark:bg-blue-500/10 dark:text-blue-300">
-                      <span class="size-1.5 rounded-full bg-blue-500"></span>Prestado
-                    </span>
-                  </td>
-                </tr>
-
-                <tr class="transition hover:bg-gray-50 dark:hover:bg-white/5">
-                  <td class="px-5 py-3.5 lg:px-6">
-                    <p class="font-medium text-gray-800 dark:text-gray-200">Arnés de seguridad</p>
-                    <p class="text-xs text-gray-500 dark:text-gray-400">PP-0114</p>
-                  </td>
-                  <td class="px-5 py-3.5">
-                    <div class="flex items-center gap-2.5">
-                      <span class="inline-flex size-8 items-center justify-center rounded-full bg-blue-50 text-xs font-semibold text-blue-700 dark:bg-blue-500/10 dark:text-blue-300">PN</span>
-                      <span class="text-gray-700 dark:text-gray-300">Pedro Núñez</span>
-                    </div>
-                  </td>
-                  <td class="px-5 py-3.5 text-gray-600 dark:text-gray-400">26 sep</td>
-                  <td class="px-5 py-3.5 text-gray-600 dark:text-gray-400">29 sep</td>
-                  <td class="px-5 py-3.5 lg:pr-6">
-                    <span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">
-                      <span class="size-1.5 rounded-full bg-emerald-500"></span>Devuelto
-                    </span>
-                  </td>
-                </tr>
-
-              </tbody>
-            </table>
-          </div>
-        </section>
-
-        <!-- Solicitudes pendientes -->
-        <section class="rounded-2xl border border-gray-200 bg-white p-5 lg:p-6 dark:border-white/10 dark:bg-neutral-900">
-          <div class="mb-5">
-            <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Solicitudes pendientes</h2>
-            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Personal que pidió un préstamo desde la página.</p>
-          </div>
-
-          <ul class="space-y-4">
-            <li class="rounded-xl border border-gray-200 p-4 dark:border-white/10">
-              <p class="text-sm font-medium text-gray-800 dark:text-gray-200">Taladro percutor Bosch</p>
-              <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Roberto Vega pide 3 días</p>
-              <div class="mt-3 flex gap-2">
-                <button type="button" class="h-9 flex-1 rounded-lg bg-emerald-600 text-sm font-medium text-white transition hover:bg-emerald-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500">Aprobar</button>
-                <button type="button" class="h-9 flex-1 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 transition hover:bg-gray-50 dark:border-white/15 dark:text-gray-300 dark:hover:bg-white/5">Rechazar</button>
-              </div>
-            </li>
-
-            <li class="rounded-xl border border-gray-200 p-4 dark:border-white/10">
-              <p class="text-sm font-medium text-gray-800 dark:text-gray-200">Escalera telescópica</p>
-              <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">María Fuentes pide 1 día</p>
-              <div class="mt-3 flex gap-2">
-                <button type="button" class="h-9 flex-1 rounded-lg bg-emerald-600 text-sm font-medium text-white transition hover:bg-emerald-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500">Aprobar</button>
-                <button type="button" class="h-9 flex-1 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 transition hover:bg-gray-50 dark:border-white/15 dark:text-gray-300 dark:hover:bg-white/5">Rechazar</button>
-              </div>
-            </li>
-
-            <li class="rounded-xl border border-gray-200 p-4 dark:border-white/10">
-              <p class="text-sm font-medium text-gray-800 dark:text-gray-200">Casco dieléctrico</p>
-              <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Luis Herrera pide 5 días</p>
-              <div class="mt-3 flex gap-2">
-                <button type="button" class="h-9 flex-1 rounded-lg bg-emerald-600 text-sm font-medium text-white transition hover:bg-emerald-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500">Aprobar</button>
-                <button type="button" class="h-9 flex-1 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 transition hover:bg-gray-50 dark:border-white/15 dark:text-gray-300 dark:hover:bg-white/5">Rechazar</button>
-              </div>
-            </li>
-          </ul>
-        </section>
-      </div>
-    </main>
-  </div>
-
-  <!-- =========================
-       MENÚ LATERAL (negro)
-  ========================== -->
-  <div class="drawer-side z-40">
-    <!-- Fondo oscuro que cierra el menú al tocar fuera (celular) -->
-    <label for="menu-lateral" aria-label="Cerrar menú" class="drawer-overlay"></label>
-
-    <aside class="flex min-h-full w-72 flex-col bg-black text-gray-300">
-
-      <!-- Logo -->
-      <div class="p-5">
-        <div class="flex items-center justify-center overflow-hidden rounded-xl bg-white/5 p-3 ring-1 ring-white/10">
-          <img src="images/logo.jpg" alt="Logo Imhotep" class="h-auto w-40 rounded-lg object-contain" />
         </div>
-      </div>
 
-      <!-- Navegación -->
-      <nav aria-label="Principal" class="flex-1 px-3">
-        <ul class="space-y-1">
-          <!-- Página activa -->
+        <ul class="space-y-2">
           <li>
-            <a
-              href="/dashboard"
-              aria-current="page"
-              class="relative flex items-center gap-3 rounded-xl bg-white/10 px-4 py-3 text-sm font-medium text-white"
-            >
-              <span class="absolute top-2 bottom-2 left-0 w-1 rounded-r-full bg-emerald-400"></span>
-              <svg class="size-5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12l8.954-8.955a1.126 1.126 0 011.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" />
-              </svg>
-              Dashboard
+            <a routerLink="/almacen/prestamos" class="flex items-center justify-between gap-3 rounded-xl bg-gray-50 px-4 py-3 text-sm transition hover:bg-gray-100 dark:bg-white/5 dark:hover:bg-white/10">
+              <span class="text-gray-700 dark:text-gray-300">Préstamos vencidos</span>
+              <span class="font-semibold" [class]="total().vencidos ? 'text-orange-600 dark:text-orange-400' : 'text-gray-400'">{{ total().vencidos }}</span>
             </a>
           </li>
-
           <li>
-            <a href="/inventario" class="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition hover:bg-white/5 hover:text-white">
-              <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9" />
-              </svg>
-              Inventario
+            <a routerLink="/almacen/inventario" class="flex items-center justify-between gap-3 rounded-xl bg-gray-50 px-4 py-3 text-sm transition hover:bg-gray-100 dark:bg-white/5 dark:hover:bg-white/10">
+              <span class="text-gray-700 dark:text-gray-300">Artículos con stock bajo</span>
+              <span class="font-semibold" [class]="total().stockBajo ? 'text-amber-600 dark:text-amber-400' : 'text-gray-400'">{{ total().stockBajo }}</span>
             </a>
           </li>
-
-          <li>
-            <a href="/prestamos" class="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition hover:bg-white/5 hover:text-white">
-              <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" />
-              </svg>
-              Préstamos
-              <span class="ml-auto rounded-full bg-orange-400/15 px-2 py-0.5 text-xs font-semibold text-orange-300">3</span>
-            </a>
-          </li>
-
-          <li>
-            <a href="almacenista" class="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition hover:bg-white/5 hover:text-white">
-              <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />
-              </svg>
-              Almacenes
-            </a>
-          </li>
-
-
-           <li>
-            <a href="rh" class="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition hover:bg-white/5 hover:text-white">
-              <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />
-              </svg>
-              Recursos Humanos
-            </a>
-          </li>
-
-          <li>
-            <a href="/reportes" class="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition hover:bg-white/5 hover:text-white">
-              <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
-              </svg>
-              Reportes
-            </a>
-          </li>
+          @if (rh(); as r) {
+            <li>
+              <a routerLink="/rh" class="flex items-center justify-between gap-3 rounded-xl bg-gray-50 px-4 py-3 text-sm transition hover:bg-gray-100 dark:bg-white/5 dark:hover:bg-white/10">
+                <span class="text-gray-700 dark:text-gray-300">Expedientes incompletos</span>
+                <span class="font-semibold" [class]="r.pendientes.length ? 'text-violet-600 dark:text-violet-400' : 'text-gray-400'">{{ r.pendientes.length }}</span>
+              </a>
+            </li>
+          }
         </ul>
-      </nav>
 
-      <!-- Usuario y cerrar sesión -->
-      <div class="m-3 rounded-2xl bg-white/5 p-4 ring-1 ring-white/10">
-        <div class="flex items-center gap-3">
-          <div class="size-10 shrink-0 overflow-hidden rounded-full ring-2 ring-emerald-400/40">
-            <img src="./images/user/owner.png" alt="Usuario" class="size-full object-cover" />
-          </div>
-          <div class="min-w-0">
-            <p class="truncate text-sm font-medium text-white">Administrador</p>
-            <p class="truncate text-xs text-gray-400">Almacén central</p>
-          </div>
+        @if (vencidos().length) {
+          <p class="mt-5 mb-2 text-xs font-semibold tracking-wide text-gray-500 uppercase dark:text-gray-400">Deben devolver</p>
+          <ul class="divide-y divide-gray-100 dark:divide-white/10">
+            @for (v of vencidos().slice(0, 4); track v.folio) {
+              <li class="flex items-center gap-3 py-2.5">
+                <span class="inline-flex size-8 shrink-0 items-center justify-center rounded-full bg-orange-50 text-xs font-semibold text-orange-700 dark:bg-orange-500/10 dark:text-orange-300">{{ iniciales(v.empleado.nombre) }}</span>
+                <div class="min-w-0 flex-1">
+                  <p class="truncate text-sm font-medium text-gray-800 dark:text-gray-200">{{ v.empleado.nombre }}</p>
+                  <p class="truncate text-xs text-gray-500 dark:text-gray-400">{{ v.folio }} · {{ v.almacen }}</p>
+                </div>
+                <span class="shrink-0 text-xs font-medium text-orange-600 dark:text-orange-400">{{ v.fechaDevolucion | date: 'dd/MM' }}</span>
+              </li>
+            }
+          </ul>
+        }
+      </section>
+    </div>
+
+    <!-- ===== Préstamos recientes ===== -->
+    <section class="overflow-hidden rounded-2xl border border-gray-200 bg-white dark:border-white/10 dark:bg-neutral-900">
+      <div class="flex items-center justify-between gap-4 px-5 pt-5 pb-3 lg:px-6">
+        <div>
+          <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Préstamos recientes</h2>
+          <p class="mt-0.5 text-sm text-gray-500 dark:text-gray-400">Quién tiene el equipo y cuándo lo devuelve.</p>
         </div>
-
-        <a
-          href=""
-          class="mt-4 flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-orange-400/30 text-sm font-medium text-orange-300 transition hover:bg-orange-400/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-300"
-        >
-          <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
-          </svg>
-          Cerrar sesión
-        </a>
+        <a routerLink="/almacen/prestamos" class="shrink-0 text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400">Ver todos</a>
       </div>
-    </aside>
+      <ul class="divide-y divide-gray-100 border-t border-gray-100 dark:divide-white/10 dark:border-white/10">
+        @for (v of recientes(); track v.folio) {
+          <li class="flex items-center gap-3 px-5 py-3.5 lg:px-6">
+            <span class="inline-flex size-9 shrink-0 items-center justify-center rounded-full bg-blue-50 text-xs font-semibold text-blue-700 dark:bg-blue-500/10 dark:text-blue-300">{{ iniciales(v.empleado.nombre) }}</span>
+            <div class="min-w-0 flex-1">
+              <p class="truncate text-sm font-medium text-gray-800 dark:text-gray-200">{{ v.empleado.nombre }}</p>
+              <p class="truncate text-xs text-gray-500 dark:text-gray-400">
+                {{ v.folio }} · {{ v.lineas.length }} artículo{{ v.lineas.length === 1 ? '' : 's' }} · {{ v.almacen }}
+              </p>
+            </div>
+            <div class="flex shrink-0 flex-col items-end gap-1 sm:flex-row sm:items-center sm:gap-3">
+              <span class="hidden text-xs text-gray-500 sm:inline dark:text-gray-400">Entrega {{ v.fechaDevolucion | date: 'dd/MM/yy' }}</span>
+              @let e = estado[almacen.estadoDe(v)];
+              <span class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium" [class]="e.etiqueta">
+                <span class="size-1.5 rounded-full" [class]="e.punto"></span>{{ e.texto }}
+              </span>
+            </div>
+          </li>
+        } @empty {
+          <li class="px-5 py-10 text-center text-sm text-gray-500 dark:text-gray-400">Todavía no hay préstamos.</li>
+        }
+      </ul>
+    </section>
   </div>
-</div>
+</app-panel-layout>

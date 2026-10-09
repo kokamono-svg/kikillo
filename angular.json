@@ -59,7 +59,7 @@
   "builder": "@angular/build:dev-server",
   "options": {
     "allowedHosts": [
-      "concerns-happened-empire-guitars.trycloudflare.com"
+      "assumptions-floor-continental-playstation.trycloudflare.com"
     ]
   },
   "configurations": {

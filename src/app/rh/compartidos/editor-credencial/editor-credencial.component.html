@@ -1,0 +1,112 @@
+<!-- Datos de la credencial / kardex -->
+<div class="space-y-5">
+  <div class="grid grid-cols-1 gap-4 md:grid-cols-[auto_1fr]">
+    <!-- Foto -->
+    <div class="flex items-center gap-3 md:flex-col md:items-start">
+      @if (datos().foto) {
+        <img [src]="datos().foto" alt="Foto del trabajador" class="size-24 rounded-xl object-cover ring-1 ring-slate-200" />
+      } @else {
+        <span class="inline-flex size-24 items-center justify-center rounded-xl bg-slate-100 text-slate-400 ring-1 ring-slate-200">
+          <svg class="size-10" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" /></svg>
+        </span>
+      }
+      <div class="flex flex-wrap gap-2">
+        <button type="button" (click)="camara.set(true)" class="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700">Tomar foto</button>
+        <label class="cursor-pointer rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-700 ring-1 ring-slate-300 hover:bg-slate-50">
+          Subir
+          <input type="file" accept="image/*" class="sr-only" (change)="subirFoto($event)" />
+        </label>
+        @if (datos().foto) {
+          <button type="button" (click)="cambiar('foto', null)" class="px-1 text-xs font-medium text-slate-400 hover:text-red-600">Quitar</button>
+        }
+      </div>
+      @if (errorFoto()) {
+        <p class="text-xs text-red-600">{{ errorFoto() }}</p>
+      }
+    </div>
+
+    <!-- Tarjeta y administrador -->
+    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <label class="block sm:col-span-2">
+        <span class="mb-1.5 block text-sm font-medium text-slate-700">
+          N° de tarjeta (va en el QR)
+          @if (!tarjetaOpcional()) { <span class="text-red-600">*</span> }
+        </span>
+        <input
+          [value]="datos().numeroTarjeta"
+          (input)="tarjeta(valor($event))"
+          (keydown.enter)="$event.preventDefault(); limpiarTarjeta()"
+          (blur)="limpiarTarjeta()"
+          autocomplete="off"
+          spellcheck="false"
+          [placeholder]="tarjetaOpcional() ? 'Escanea su credencial actual o déjalo vacío para generar uno' : 'Escanea o escribe el número'"
+          class="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 font-mono text-sm outline-none transition placeholder:font-sans placeholder:text-slate-400 focus:border-blue-700 focus:ring-4 focus:ring-blue-700/10"
+        />
+        <span class="mt-1 block text-xs text-slate-500">Si ya tiene credencial del cliente, escanéala: así el almacén la reconoce al prestar.</span>
+      </label>
+      <label class="block">
+        <span class="mb-1.5 block text-sm font-medium text-slate-700">Administrador</span>
+        <input [value]="datos().administrador" (input)="cambiar('administrador', valor($event))" class="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm outline-none transition focus:border-blue-700 focus:ring-4 focus:ring-blue-700/10" />
+      </label>
+      <label class="block">
+        <span class="mb-1.5 block text-sm font-medium text-slate-700">Fecha de emisión</span>
+        <input type="date" [value]="datos().fechaEmision ?? ''" (input)="cambiar('fechaEmision', valor($event) || null)" class="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm outline-none transition focus:border-blue-700 focus:ring-4 focus:ring-blue-700/10" />
+      </label>
+    </div>
+  </div>
+
+  <!-- Cursos -->
+  <div>
+    <div class="flex flex-wrap items-center justify-between gap-2">
+      <h4 class="text-sm font-semibold text-slate-800">Cursos (kardex)</h4>
+      @if (disponibles().length) {
+        <select (change)="agregarCurso(valor($event)); $any($event.target).value = ''" class="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 outline-none focus:border-blue-700" aria-label="Agregar curso">
+          <option value="">+ Agregar curso</option>
+          @for (c of disponibles(); track c.clave) {
+            <option [value]="c.clave">{{ c.nombre }}</option>
+          }
+        </select>
+      }
+    </div>
+
+    <ul class="mt-2 space-y-2">
+      @for (c of datos().cursos; track c.clave; let i = $index) {
+        <li class="grid grid-cols-[1fr_auto] gap-2 rounded-xl border p-3 sm:grid-cols-[minmax(0,1fr)_7rem_9.5rem_auto] sm:items-center" [class]="vigente(c) ? 'border-slate-200' : 'border-red-200 bg-red-50/50'">
+          <div class="min-w-0">
+            <p class="truncate text-sm font-medium text-slate-800">{{ catalogo.find((x) => x.clave === c.clave)?.nombre ?? c.clave }}</p>
+            <p class="text-xs" [class]="vigente(c) ? 'text-emerald-600' : 'text-red-600'">{{ vigente(c) ? 'Vigente' : 'Vencido' }}</p>
+          </div>
+          <button type="button" (click)="quitarCurso(i)" class="self-start px-1 text-xs font-medium text-slate-400 hover:text-red-600 sm:order-last sm:self-center" [attr.aria-label]="'Quitar curso'">Quitar</button>
+          <label class="block">
+            <span class="sr-only">ID del curso</span>
+            <input [value]="c.folio" (input)="editarCurso(i, { folio: valor($event) })" placeholder="ID" inputmode="numeric" class="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 font-mono text-sm outline-none focus:border-blue-700" />
+          </label>
+          <label class="block">
+            <span class="sr-only">Vigencia</span>
+            <input type="date" [value]="c.vigencia" (input)="editarCurso(i, { vigencia: valor($event) })" class="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm outline-none focus:border-blue-700" />
+          </label>
+        </li>
+      } @empty {
+        <li class="rounded-xl border border-dashed border-slate-300 px-4 py-4 text-center text-sm text-slate-500">
+          Sin cursos. Sin ellos, el almacén no le presta equipo que pida curso (arnés, detector de gases…).
+        </li>
+      }
+    </ul>
+  </div>
+
+  <!-- Casillas del reverso -->
+  <div class="flex flex-wrap gap-3">
+    <label class="flex cursor-pointer items-center gap-2.5 rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-700 has-[:checked]:border-blue-600 has-[:checked]:bg-blue-50">
+      <input type="checkbox" [checked]="datos().reglasOro" (change)="cambiar('reglasOro', !datos().reglasOro)" class="size-4 accent-blue-700" />
+      10 Reglas de Oro
+    </label>
+    <label class="flex cursor-pointer items-center gap-2.5 rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-700 has-[:checked]:border-blue-600 has-[:checked]:bg-blue-50">
+      <input type="checkbox" [checked]="datos().fpsNivel0" (change)="cambiar('fpsNivel0', !datos().fpsNivel0)" class="size-4 accent-blue-700" />
+      FPS Nivel 0
+    </label>
+  </div>
+</div>
+
+@if (camara()) {
+  <app-camara [restantes]="1" (foto)="fotoDeCamara($event)" (cerrar)="camara.set(false)" />
+}

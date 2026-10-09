@@ -1,14 +1,27 @@
-import { Component, computed, inject, signal, viewChild, ElementRef } from '@angular/core';
+import { Component, computed, effect, inject, signal, untracked, viewChild, ElementRef } from '@angular/core';
 import { DatePipe } from '@angular/common';
+import { RouterLink } from '@angular/router';
 import { AlmacenService } from './almacen.service';
-import { Articulo, LineaVale, Vale } from './almacen.models';
+import { Articulo, LineaVale, Pieza, Vale } from './almacen.models';
 import { FirmaPad } from './firma-pad/firma-pad';
+import { AuthService } from '../auth/auth.service';
+import { AccesoAlmacen } from './acceso-almacen.service';
+import { ValeImpresoComponent } from './vale-impreso/vale-impreso.component';
+import { CLASE_TIPO } from './estado-prestamo';
+import { GafeteService, LecturaGafete } from './gafete.service';
+import { nombreCompleto } from '../rh/rh.utils';
+import { clavesVigentes, cursoVigente, nombreCurso } from '../compartido/cursos';
+import { contieneCodigo, limpiarCodigo } from '../compartido/codigos';
 
 /* =====================================================
-   PANTALLA DEL ALMACENISTA
+   NUEVO PRÉSTAMO (admin y almacenista; compras no presta)
+   El equipo sale del almacén elegido arriba (el almacenista
+   siempre usa el suyo).
    Flujo en 4 pasos:
-     1. Equipo   → buscar o escanear lo que pide el trabajador
-     2. Empleado → nombre, número, actividad, motivo y fecha de entrega
+     1. Empleado → escanear su credencial (o capturar a mano), actividad,
+                   motivo y fecha de entrega. Con la credencial se saben sus cursos.
+     2. Equipo   → buscar o escanear lo que pide; el equipo que exige curso
+                   solo se agrega si el trabajador lo tiene vigente
      3. Firma    → el trabajador firma en el celular
      4. Vale     → se genera con folio, datos, equipo y firma
 ===================================================== */
@@ -18,32 +31,28 @@ const PIN_SUPERVISOR = '1234';
 
 @Component({
   selector: 'app-almacenista',
-  imports: [FirmaPad, DatePipe],
+  imports: [FirmaPad, DatePipe, RouterLink, ValeImpresoComponent],
   templateUrl: './almacenista.component.html',
   styleUrl: './almacenista.component.css',
 })
 export class AlmacenistaComponent {
   /* inject() pide a Angular la instancia del servicio (la misma para toda la app) */
   readonly almacen = inject(AlmacenService);
+  readonly acceso = inject(AccesoAlmacen);
+  readonly claseTipo = CLASE_TIPO;
 
-  /* ---------- Datos fijos de la demo (luego vendrán del login) ---------- */
-  readonly almacenista = 'Oscar Salas';
-  readonly almacenes = [
-    'Colonia de Contratistas (Mittal)',
-    'Central Kepler',
-    'Área Midrex',
-    'Área HYL',
-    'Área Laminador',
-    'Área Minas',
-  ];
-  readonly pasos = ['Equipo', 'Empleado', 'Firma', 'Vale'];
+  /* ---------- Datos de la sesión ---------- */
+  readonly almacenista = inject(AuthService).usuario()?.nombre ?? '';
+
+  /** Almacén del que sale el equipo ('' = falta elegirlo). */
+  readonly almacenElegido = this.acceso.actual;
+  readonly pasos = ['Empleado', 'Equipo', 'Firma', 'Vale'];
 
   /** Fecha de hoy en formato AAAA-MM-DD (para el mínimo del calendario). */
   readonly hoy = this.fechaISO(new Date());
 
   /* ---------- Estado de la pantalla (signals) ---------- */
   readonly paso = signal(1);
-  readonly vista = signal<'nuevo' | 'historial'>('nuevo');
 
   // Paso 1: equipo
   readonly busqueda = signal('');
@@ -59,9 +68,27 @@ export class AlmacenistaComponent {
   readonly autorizados = signal<string[]>([]);
 
   // Paso 2: empleado
-  readonly almacenElegido = signal(this.almacenes[0]);
   readonly nombre = signal('');
   readonly numeroEmpleado = signal('');
+
+  // Gafete (opcional): al escanearlo se llenan los datos con lo registrado en RH
+  private readonly gafetes = inject(GafeteService);
+  readonly textoGafete = signal('');
+  readonly leyendoGafete = signal(false);
+  readonly gafete = signal<LecturaGafete | null>(null);
+  readonly inputGafete = viewChild<ElementRef<HTMLInputElement>>('inputGafete');
+  readonly nombreCompleto = nombreCompleto;
+  readonly nombreCurso = nombreCurso;
+  readonly cursoVigente = cursoVigente;
+
+  /**
+   * Cursos vigentes del trabajador identificado con su credencial.
+   * undefined = no se escaneó credencial (datos a mano): el equipo que pide curso no se presta.
+   */
+  readonly cursosVigentes = computed(() => {
+    const t = this.gafete()?.trabajador;
+    return t && t.activo ? clavesVigentes(t.cursos) : undefined;
+  });
   readonly actividad = signal('');
   readonly motivo = signal('');
   readonly fechaDevolucion = signal(this.fechaISO(this.sumarDias(new Date(), 7)));
@@ -77,14 +104,34 @@ export class AlmacenistaComponent {
 
   readonly inputEscaner =
   viewChild<ElementRef<HTMLInputElement>>('inputEscaner');
+
+  constructor() {
+    // Si cambian de almacén a medio vale, el carrito ya no corresponde: se empieza de nuevo
+    effect(() => {
+      this.almacenElegido();
+      untracked(() => {
+        if (this.paso() === 4) return; // el vale ya emitido se queda en pantalla
+        this.carrito.set([]);
+        this.autorizados.set([]);
+        this.autorizoSupervisor.set('');
+        this.paso.set(1);
+      });
+    });
+  }
+
   /* ---------- Valores calculados ---------- */
 
   /** Catálogo filtrado por el buscador (ignora acentos y mayúsculas). */
   readonly filtrados = computed(() => {
     const t = this.normalizar(this.busqueda());
     return this.almacen
-      .catalogo()
-      .filter((a) => this.normalizar(a.nombre).includes(t) || a.codigo.toLowerCase().includes(t));
+      .catalogoDe(this.almacenElegido())
+      .filter(
+        (a) =>
+          this.normalizar(a.nombre).includes(t) ||
+          contieneCodigo(a.codigo, this.busqueda()) ||
+          !!a.piezas?.some((p) => contieneCodigo(p.serie, this.busqueda())),
+      );
   });
 
   readonly totalPiezas = computed(() => this.carrito().reduce((s, l) => s + l.cantidad, 0));
@@ -92,10 +139,11 @@ export class AlmacenistaComponent {
   /** Texto que explica qué falta para avanzar ('' = todo listo). */
   readonly falta = computed(() => {
     switch (this.paso()) {
-      case 1:
-        return this.carrito().length ? '' : 'Agrega al menos un artículo.';
       case 2:
-        if (!this.nombre().trim()) return 'Escribe el nombre del trabajador.';
+        return this.carrito().length ? '' : 'Agrega al menos un artículo.';
+      case 1:
+        if (this.gafete()?.trabajador && !this.gafete()!.trabajador!.activo) return 'El trabajador está dado de baja.';
+        if (!this.nombre().trim()) return 'Escanea la credencial o escribe el nombre del trabajador.';
         if (!this.numeroEmpleado().trim()) return 'Escribe el número de empleado.';
         if (!this.actividad().trim()) return 'Indica la actividad que realizará.';
         if (!this.motivo().trim()) return 'Indica para qué ocupa el equipo.';
@@ -119,6 +167,11 @@ export class AlmacenistaComponent {
       .reduce((s, l) => s + l.cantidad, 0);
   }
 
+  /** Piezas que se pueden entregar ahora: aptas, sin prestar y que no están ya en el vale. */
+  piezasLibres(a: Articulo): Pieza[] {
+    return (a.piezas ?? []).filter((p) => p.estado === 'apto' && !p.prestada && !this.piezaEnCarrito(p.serie));
+  }
+
   /** ¿Esta pieza ya está en el carrito? (para deshabilitar su botón) */
   piezaEnCarrito(serie: string): boolean {
     return this.carrito().some((l) => l.serie === serie);
@@ -131,6 +184,12 @@ export class AlmacenistaComponent {
    *  - si se supera el límite, se pide autorización de supervisor
    */
   agregar(a: Articulo, serie?: string): void {
+    // Regla: equipo que exige curso (arnés, detector de gases...) solo si lo tiene vigente
+    const sinCurso = this.almacen.faltaCurso(a, this.cursosVigentes());
+    if (sinCurso) {
+      this.avisar(sinCurso, 'alerta');
+      return;
+    }
     // Regla: equipo por pieza necesita la serie exacta
     if (a.piezas && !serie) {
       this.avisar(`${a.nombre}: elige o escanea la pieza (código individual).`, 'alerta');
@@ -184,25 +243,90 @@ export class AlmacenistaComponent {
    * Por eso basta con un input que reaccione al Enter.
    */
   escanear(): void {
-   const codigo = this.codigoEscaneado().trim().toUpperCase().replace(/'/g, '-');
+    // ALT'024, alt 024 o ALT024: todos se leen como ALT-024
+    const codigo = limpiarCodigo(this.codigoEscaneado());
     this.codigoEscaneado.set('');
     if (!codigo) return;
-    const a = this.almacen.buscarPorCodigo(codigo);
+    const a = this.almacen.buscarPorCodigo(this.almacenElegido(), codigo);
     if (!a) {
       this.avisar(`El código ${codigo} no existe en el catálogo.`, 'alerta');
       return;
-      
     }
     this.inputEscaner()?.nativeElement.focus();
     // Si el código es la serie de una pieza, se agrega esa pieza exacta
-    const esPieza = a.piezas?.some((p) => p.serie === codigo);
-    this.agregar(a, esPieza ? codigo : undefined);
+    this.agregar(a, this.almacen.piezaPorCodigo(a, codigo)?.serie);
+  }
+
+  /**
+   * Busca en RH al dueño del gafete y llena nombre y número de empleado.
+   * siNoEsGafete: aviso que se muestra si no es un gafete (se usa desde el paso 1).
+   */
+  leerGafete(texto = this.textoGafete(), siNoEsGafete = ''): void {
+    if (!texto.trim() || this.leyendoGafete()) return;
+    this.textoGafete.set('');
+    this.leyendoGafete.set(true);
+    this.gafetes.leer(texto).subscribe((r) => {
+      this.leyendoGafete.set(false);
+      const t = r.trabajador;
+      if (!t) {
+        if (siNoEsGafete) {
+          this.avisar(siNoEsGafete, 'alerta');
+        } else {
+          this.gafete.set(r);
+        }
+        return;
+      }
+      this.gafete.set(r);
+      if (!t.activo) {
+        // Dado de baja: no se llenan sus datos para no prestarle por error
+        this.avisar(`${nombreCompleto(t)} está dado de baja. No se le puede prestar equipo.`, 'alerta');
+        return;
+      }
+      this.nombre.set(nombreCompleto(t));
+      this.numeroEmpleado.set(t.numeroEmpleado);
+      // Un solo aviso: si se quitó equipo del vale, eso es lo importante
+      const quitados = this.revisarCarrito(false);
+      if (quitados) {
+        this.avisar(`${nombreCompleto(t)}: se quitaron ${quitados} artículo(s) del vale porque requieren un curso que no tiene.`, 'alerta');
+      } else {
+        this.avisar(`Credencial de ${nombreCompleto(t)}: datos listos.`, 'ok');
+      }
+      this.inputGafete()?.nativeElement.focus();
+    });
+  }
+
+  /** Quita lo que llenó el gafete para capturar a mano. */
+  quitarGafete(): void {
+    this.gafete.set(null);
+    this.nombre.set('');
+    this.numeroEmpleado.set('');
+    this.revisarCarrito();
+  }
+
+  /** Saca del vale lo que el trabajador actual ya no puede llevar (por curso). Regresa cuántos quitó. */
+  private revisarCarrito(avisar = true): number {
+    const catalogo = this.almacen.catalogoDe(this.almacenElegido());
+    const antes = this.carrito().length;
+    this.carrito.update((lista) =>
+      lista.filter((l) => {
+        const a = catalogo.find((x) => x.codigo === l.codigo);
+        return !a || !this.almacen.faltaCurso(a, this.cursosVigentes());
+      }),
+    );
+    const quitados = antes - this.carrito().length;
+    if (quitados && avisar) this.avisar(`Se quitaron ${quitados} artículo(s) que requieren un curso que este trabajador no tiene.`, 'alerta');
+    return quitados;
+  }
+
+  /** Motivo por el que no se le puede prestar este artículo ('' = sí se puede). */
+  bloqueoPorCurso(a: Articulo): string {
+    return this.almacen.faltaCurso(a, this.cursosVigentes());
   }
 
   /** Suma o resta 1 a un renglón (solo artículos por cantidad). */
   cambiarCantidad(linea: LineaVale, cambio: number): void {
     if (cambio > 0) {
-      const a = this.almacen.catalogo().find((x) => x.codigo === linea.codigo);
+      const a = this.almacen.catalogoDe(this.almacenElegido()).find((x) => x.codigo === linea.codigo);
       if (a) this.agregar(a);
       return;
     }
@@ -272,12 +396,18 @@ export class AlmacenistaComponent {
         numeroEmpleado: this.numeroEmpleado().trim(),
         actividad: this.actividad().trim(),
         motivo: this.motivo().trim(),
+        cursos: this.cursosVigentes(),
       },
       lineas: this.carrito(),
       firma: this.firma(),
       autorizoSupervisor: this.autorizoSupervisor() || undefined,
     };
-    this.almacen.registrarVale(vale);
+    // El servicio valida otra vez (stock, piezas prestadas o no aptas) antes de descontar
+    const error = this.almacen.registrarVale(vale);
+    if (error) {
+      this.avisar(error, 'alerta');
+      return;
+    }
     this.valeActual.set(vale);
     this.paso.set(4);
     this.avisar(`Vale ${vale.folio} generado.`, 'ok');
@@ -289,6 +419,8 @@ export class AlmacenistaComponent {
     this.carrito.set([]);
     this.nombre.set('');
     this.numeroEmpleado.set('');
+    this.gafete.set(null);
+    this.textoGafete.set('');
     this.actividad.set('');
     this.motivo.set('');
     this.fechaDevolucion.set(this.fechaISO(this.sumarDias(new Date(), 7)));
@@ -297,15 +429,7 @@ export class AlmacenistaComponent {
     this.autorizoSupervisor.set('');
     this.supervisorNombre.set('');
     this.valeActual.set(null);
-    this.vista.set('nuevo');
     this.paso.set(1);
-  }
-
-  /** Abre un vale ya emitido desde el historial. */
-  verVale(v: Vale): void {
-    this.valeActual.set(v);
-    this.vista.set('nuevo');
-    this.paso.set(4);
   }
 
   /** Abre el diálogo de impresión del navegador (desde ahí se puede "Guardar como PDF"). */

@@ -1,0 +1,237 @@
+<!-- =====================================================
+     AGREGAR ARTÍCULO AL ALMACÉN
+     print:hidden en todo menos las etiquetas: al imprimir
+     solo sale la hoja de etiquetas.
+====================================================== -->
+@if (etiquetas(); as lista) {
+  <!-- ===== Listo: etiquetas para imprimir ===== -->
+  <div class="space-y-5">
+    <div class="flex flex-col gap-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-5 sm:flex-row sm:items-center print:hidden dark:border-emerald-500/30 dark:bg-emerald-500/10">
+      <span class="inline-flex size-12 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white">
+        <svg class="size-6" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>
+      </span>
+      <div class="min-w-0 flex-1">
+        <h1 class="text-lg font-bold text-emerald-900 dark:text-emerald-200">Se agregó al inventario de {{ destino() }}</h1>
+        <p class="text-sm text-emerald-800 dark:text-emerald-300">
+          {{ consumible() ? entran() + ' unidades sumadas al stock.' : lista.length + (lista.length === 1 ? ' pieza registrada' : ' piezas registradas') + ' con su número de serie.' }}
+          Imprime {{ lista.length === 1 ? 'la etiqueta' : 'las etiquetas' }} y pégala{{ lista.length === 1 ? '' : 's' }} en el equipo.
+        </p>
+      </div>
+      <div class="flex shrink-0 flex-wrap gap-2">
+        <button type="button" (click)="imprimir()" class="inline-flex h-11 items-center gap-2 rounded-xl bg-blue-600 px-5 text-sm font-semibold text-white shadow-lg shadow-blue-600/25 hover:bg-blue-700">
+          <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M6.72 13.829c-.24.03-.48.062-.72.096m.72-.096a42.415 42.415 0 0110.56 0m-10.56 0L6.34 18m10.94-4.171c.24.03.48.062.72.096m-.72-.096L17.66 18m0 0l.229 2.523a1.125 1.125 0 01-1.12 1.227H7.231c-.662 0-1.18-.568-1.12-1.227L6.34 18m11.318 0h1.091A2.25 2.25 0 0021 15.75V9.456c0-1.081-.768-2.015-1.837-2.175a48.055 48.055 0 00-1.913-.247M6.34 18H5.25A2.25 2.25 0 013 15.75V9.456c0-1.081.768-2.015 1.837-2.175a48.041 48.041 0 011.913-.247m10.5 0a48.536 48.536 0 00-10.5 0m10.5 0V3.375c0-.621-.504-1.125-1.125-1.125h-8.25c-.621 0-1.125.504-1.125 1.125v3.659M18 10.5h.008v.008H18V10.5zm-3 0h.008v.008H15V10.5z" /></svg>
+          Imprimir etiquetas
+        </button>
+        <button type="button" (click)="otro()" class="inline-flex h-11 items-center rounded-xl border border-gray-300 bg-white px-5 text-sm font-semibold text-gray-700 hover:bg-gray-50 dark:border-white/15 dark:bg-neutral-900 dark:text-gray-200">Agregar otro</button>
+        <a routerLink="/almacen/inventario" class="inline-flex h-11 items-center rounded-xl px-4 text-sm font-semibold text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-white/5">Ver inventario</a>
+      </div>
+    </div>
+
+    <app-etiquetas [etiquetas]="lista" />
+  </div>
+} @else {
+  <div class="mx-auto max-w-3xl space-y-5 print:hidden">
+    <div>
+      <h1 class="text-2xl font-bold tracking-tight text-gray-900 sm:text-3xl dark:text-white">Agregar artículo</h1>
+      <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+        La herramienta y el EPP se registran pieza por pieza con su número de serie. Los consumibles, solo por cantidad.
+      </p>
+    </div>
+
+    <!-- ===== 1. Almacén ===== -->
+    @if (acceso.veTodos()) {
+      <label class="block rounded-2xl border border-gray-200 bg-white p-4 sm:p-5 dark:border-white/10 dark:bg-neutral-900">
+        <span class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">Almacén que recibe</span>
+        <select [value]="destino()" (change)="destino.set(valor($event)); eleccion.set(null)" class="campo-agregar">
+          <option value="" disabled>Elige el almacén</option>
+          @for (a of acceso.almacenes(); track a) {
+            <option [value]="a">{{ a }}</option>
+          }
+        </select>
+      </label>
+    }
+
+    <!-- ===== 2. ¿Qué artículo? ===== -->
+    @if (destino()) {
+      <section class="rounded-2xl border border-gray-200 bg-white p-4 sm:p-5 dark:border-white/10 dark:bg-neutral-900">
+        <div class="flex items-center justify-between gap-3">
+          <h2 class="text-base font-semibold text-gray-900 dark:text-white">1 · ¿Qué artículo entra?</h2>
+          @if (eleccion() !== null) {
+            <button type="button" (click)="eleccion.set(null)" class="text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400">Cambiar</button>
+          }
+        </div>
+
+        @if (eleccion() === null) {
+          <input
+            type="search"
+            placeholder="Busca si ya existe: nombre o código"
+            [value]="busqueda()"
+            (input)="busqueda.set(valor($event))"
+            class="campo-agregar mt-3"
+          />
+          <ul class="mt-3 max-h-72 divide-y divide-gray-100 overflow-y-auto rounded-xl border border-gray-200 dark:divide-white/10 dark:border-white/10">
+            @for (a of encontrados(); track a.codigo) {
+              <li>
+                <button type="button" (click)="elegir(a.codigo)" class="flex w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-gray-50 dark:hover:bg-white/5">
+                  <span class="min-w-0 flex-1">
+                    <span class="block truncate text-sm font-medium text-gray-900 dark:text-white">{{ a.nombre }}</span>
+                    <span class="block font-mono text-xs text-gray-500">{{ a.codigo }} · {{ almacen.disponibles(a) }} disponibles</span>
+                  </span>
+                  <span class="shrink-0 rounded-full px-2 py-0.5 text-xs font-medium" [class]="claseTipo[a.tipo]">{{ a.tipo }}</span>
+                </button>
+              </li>
+            } @empty {
+              <li class="px-4 py-5 text-center text-sm text-gray-500">No hay artículos con ese nombre en este almacén.</li>
+            }
+          </ul>
+          <button type="button" (click)="elegir('nuevo')" class="mt-3 inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-blue-300 text-sm font-semibold text-blue-700 transition hover:border-blue-500 hover:bg-blue-50 dark:border-blue-500/40 dark:text-blue-300 dark:hover:bg-blue-500/10">
+            <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
+            {{ busqueda() ? 'Crear "' + busqueda() + '" como artículo nuevo' : 'Es un artículo nuevo' }}
+          </button>
+        } @else if (existente(); as a) {
+          <!-- Artículo que ya existe: solo se suman unidades -->
+          <div class="mt-3 flex items-center gap-3 rounded-xl bg-gray-50 p-3 dark:bg-white/5">
+            <div class="min-w-0 flex-1">
+              <p class="truncate font-semibold text-gray-900 dark:text-white">{{ a.nombre }}</p>
+              <p class="font-mono text-xs text-gray-500">{{ a.codigo }} · máx. {{ a.limite }} por vale</p>
+            </div>
+            <span class="shrink-0 rounded-full px-2 py-0.5 text-xs font-medium" [class]="claseTipo[a.tipo]">{{ a.tipo }}</span>
+          </div>
+        } @else {
+          <!-- Artículo nuevo -->
+          <div class="mt-4 space-y-4">
+            <div>
+              <span class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">Tipo</span>
+              <div class="grid gap-2 sm:grid-cols-3">
+                @for (t of tipos; track t.tipo) {
+                  <button
+                    type="button"
+                    (click)="cambiarTipo(t.tipo)"
+                    [attr.aria-pressed]="tipo() === t.tipo"
+                    class="rounded-xl border-2 p-3 text-left transition"
+                    [class]="tipo() === t.tipo ? 'border-blue-600 bg-blue-50 dark:bg-blue-500/10' : 'border-gray-200 hover:border-gray-300 dark:border-white/10'"
+                  >
+                    <span class="block text-sm font-semibold text-gray-900 dark:text-white">{{ t.texto }}</span>
+                    <span class="block text-xs text-gray-500 dark:text-gray-400">{{ t.ayuda }}</span>
+                  </button>
+                }
+              </div>
+            </div>
+
+            <div class="grid gap-4 sm:grid-cols-[1fr_12rem]">
+              <label class="block">
+                <span class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">Nombre</span>
+                <input type="text" [value]="nombre()" (input)="cambiarNombre(valor($event))" placeholder="Ej. Taladro percutor Bosch" class="campo-agregar" />
+              </label>
+              <label class="block">
+                <span class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">Código</span>
+                <input type="text" [value]="codigo()" (input)="cambiarCodigo(valor($event))" maxlength="20" autocapitalize="characters" spellcheck="false" class="campo-agregar font-mono uppercase" />
+              </label>
+            </div>
+
+            <div class="flex flex-wrap items-end gap-4">
+              <label class="block w-40">
+                <span class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">Máximo por vale</span>
+                <input type="number" min="1" [value]="limite()" (input)="limite.set(numero($event))" class="campo-agregar" />
+              </label>
+              @if (tipo() !== 'Consumible') {
+                <label class="flex h-11 cursor-pointer items-center gap-2.5 rounded-xl border border-gray-200 px-3 text-sm text-gray-700 has-[:checked]:border-violet-400 has-[:checked]:bg-violet-50 dark:border-white/10 dark:text-gray-300 dark:has-[:checked]:bg-violet-500/10">
+                  <input type="checkbox" [checked]="costoso()" (change)="costoso.set(!costoso())" class="size-4 accent-violet-600" />
+                  Equipo de alto valor
+                </label>
+                <label class="block min-w-56 flex-1">
+                  <span class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">Curso requerido para prestarlo</span>
+                  <select [value]="cursoRequerido()" (change)="cursoRequerido.set(valor($event))" class="campo-agregar">
+                    <option value="">Ninguno</option>
+                    @for (c of cursos; track c.clave) {
+                      <option [value]="c.clave">{{ c.nombre }}</option>
+                    }
+                  </select>
+                </label>
+              }
+            </div>
+          </div>
+        }
+      </section>
+    }
+
+    <!-- ===== 3. Unidades ===== -->
+    @if (eleccion() !== null) {
+      <section class="rounded-2xl border border-gray-200 bg-white p-4 sm:p-5 dark:border-white/10 dark:bg-neutral-900">
+        @if (consumible()) {
+          <h2 class="text-base font-semibold text-gray-900 dark:text-white">2 · ¿Cuántas unidades entran?</h2>
+          <p class="mt-0.5 text-sm text-gray-500 dark:text-gray-400">Es consumible: no lleva serie. Su etiqueta usa el código <span class="font-mono font-semibold">{{ codigoFinal() }}</span>.</p>
+          <input type="number" min="1" [value]="cantidad()" (input)="cantidad.set(numero($event))" class="campo-agregar mt-3 max-w-40 text-lg font-semibold" />
+        } @else {
+          <h2 class="text-base font-semibold text-gray-900 dark:text-white">2 · Números de serie</h2>
+          <p class="mt-0.5 text-sm text-gray-500 dark:text-gray-400">Una serie por pieza. Escanéala o escríbela y presiona Enter.</p>
+
+          <div class="mt-3 flex gap-2">
+            <input
+              type="text"
+              autocomplete="off"
+              autocapitalize="characters"
+              spellcheck="false"
+              placeholder="Serie de la pieza"
+              [value]="serieEscrita()"
+              (input)="serieEscrita.set(valor($event))"
+              (keydown.enter)="$event.preventDefault(); agregarSerie()"
+              class="campo-agregar min-w-0 flex-1 font-mono uppercase placeholder:normal-case"
+              [class.campo-error]="!!errorSerie()"
+            />
+            <button type="button" (click)="agregarSerie()" [disabled]="!serieEscrita().trim() || !!errorSerie()" class="h-11 shrink-0 rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white hover:bg-blue-700 disabled:bg-gray-300">Agregar</button>
+          </div>
+          @if (errorSerie()) {
+            <p class="mt-1.5 text-xs text-red-600">{{ errorSerie() }}</p>
+          }
+
+          <!-- Sin serie de fábrica: se genera una -->
+          <div class="mt-3 flex flex-wrap items-center gap-2 rounded-xl bg-gray-50 p-3 text-sm dark:bg-white/5">
+            <span class="text-gray-600 dark:text-gray-400">¿No trae serie? Generar</span>
+            <input type="number" min="1" max="200" [value]="cuantasGenerar()" (input)="cuantasGenerar.set(numero($event))" class="h-9 w-20 rounded-lg border border-gray-200 bg-white px-2 text-center dark:border-white/10 dark:bg-neutral-900" aria-label="Cuántas series generar" />
+            <button type="button" (click)="generarSeries()" [disabled]="!codigoFinal()" class="h-9 rounded-lg border border-gray-300 bg-white px-3 font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 dark:border-white/15 dark:bg-neutral-900 dark:text-gray-200">
+              {{ codigoFinal() || 'CÓDIGO' }}-001…
+            </button>
+          </div>
+
+          @if (series().length) {
+            <div class="mt-3 flex flex-wrap gap-1.5">
+              @for (s of series(); track s) {
+                <span class="inline-flex items-center gap-1 rounded-lg border border-emerald-200 bg-emerald-50 py-1 pr-1 pl-2 font-mono text-xs text-emerald-800 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300">
+                  {{ s }}
+                  <button type="button" (click)="quitarSerie(s)" [attr.aria-label]="'Quitar ' + s" class="inline-flex size-5 items-center justify-center rounded hover:bg-emerald-200/60">×</button>
+                </span>
+              }
+            </div>
+          }
+        }
+
+        <!-- Cómo queda el stock -->
+        <div class="mt-4 flex items-center justify-between gap-3 rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-white/10">
+          <span class="text-gray-600 dark:text-gray-400">Disponibles en {{ destino() }}</span>
+          <span class="font-semibold text-gray-900 dark:text-white">
+            {{ stockAntes() }}<span class="text-gray-400">&nbsp;→&nbsp;</span><span class="text-emerald-600 dark:text-emerald-400">{{ stockAntes() + entran() }}</span>
+          </span>
+        </div>
+      </section>
+
+      @if (error()) {
+        <div role="alert" class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300">{{ error() }}</div>
+      }
+
+      <div class="flex flex-col-reverse items-stretch gap-3 sm:flex-row sm:items-center sm:justify-end">
+        @if (falta()) {
+          <p class="text-sm text-orange-600 sm:mr-auto">{{ falta() }}</p>
+        }
+        <button
+          type="button"
+          (click)="guardar()"
+          [disabled]="!!falta() || guardando()"
+          class="h-12 rounded-xl bg-blue-600 px-8 text-sm font-semibold text-white shadow-lg shadow-blue-600/25 transition hover:bg-blue-700 disabled:bg-gray-300 disabled:shadow-none"
+        >
+          Agregar al inventario y generar etiquetas
+        </button>
+      </div>
+    }
+  </div>
+}

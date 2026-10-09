@@ -42,3 +42,13 @@ __screenshots__/
 # System files
 .DS_Store
 Thumbs.db
+
+# Backend (Flask)
+backend/.env
+__pycache__/
+*.pyc
+
+# Backend (Flask)
+backend/.env
+__pycache__/
+*.pyc

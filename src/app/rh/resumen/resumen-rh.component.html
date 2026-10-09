@@ -1,0 +1,240 @@
+<!-- =====================================================
+     TABLERO DE RECURSOS HUMANOS (mismo estilo que el dashboard)
+====================================================== -->
+<div class="space-y-6">
+  <!-- Título y acción principal -->
+  <div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+    <div>
+      <h1 class="text-2xl font-bold tracking-tight text-gray-900 sm:text-3xl">Recursos Humanos</h1>
+      <p class="mt-1 text-sm text-gray-500">Personal, expedientes y equipo pendiente de devolver.</p>
+    </div>
+    <a
+      routerLink="/rh/alta"
+      class="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 text-sm font-semibold text-white shadow-lg shadow-blue-600/25 transition hover:-translate-y-0.5 hover:bg-blue-700 hover:shadow-xl hover:shadow-blue-600/30 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 active:translate-y-0"
+    >
+      <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+      </svg>
+      Dar de alta
+    </a>
+  </div>
+
+  @if (error()) {
+    <div class="rounded-2xl border border-orange-200 bg-orange-50 p-6 text-center text-sm text-orange-700">
+      No se pudo cargar el tablero.
+      <button type="button" (click)="cargar()" class="ml-1 font-semibold underline">Reintentar</button>
+    </div>
+  } @else if (!resumen()) {
+    <!-- Esqueleto mientras carga -->
+    <div class="grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-gray-200 bg-gray-200 lg:grid-cols-4">
+      @for (i of [1, 2, 3, 4]; track i) {
+        <div class="h-36 animate-pulse bg-white"></div>
+      }
+    </div>
+  } @else {
+    @let r = resumen()!;
+
+    <!-- =========================
+         INDICADORES
+    ========================== -->
+    <section aria-label="Resumen" class="grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-gray-200 bg-gray-200 lg:grid-cols-4">
+      <div class="bg-white p-4 sm:p-5 lg:p-6">
+        <div class="mb-3 inline-flex size-10 items-center justify-center rounded-xl bg-neutral-900 text-white sm:mb-4">
+          <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
+          </svg>
+        </div>
+        <p class="text-sm text-gray-500">Personal activo</p>
+        <p class="mt-1 text-2xl font-semibold text-gray-900 sm:text-3xl">{{ r.activos }}</p>
+        <p class="mt-1 text-xs text-gray-500">{{ r.inactivos }} dados de baja</p>
+      </div>
+
+      <div class="bg-white p-4 sm:p-5 lg:p-6">
+        <div class="mb-3 inline-flex size-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 sm:mb-4">
+          <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M19 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zM4 19.235v-.11a6.375 6.375 0 0112.75 0v.109A12.318 12.318 0 0110.374 21c-2.331 0-4.512-.645-6.374-1.766z" />
+          </svg>
+        </div>
+        <p class="text-sm text-gray-500">Altas del mes</p>
+        <p class="mt-1 text-2xl font-semibold text-gray-900 sm:text-3xl">{{ r.altasMes }}</p>
+        <p class="mt-1 text-xs text-emerald-600">{{ r.bajasMes }} {{ r.bajasMes === 1 ? 'baja' : 'bajas' }} en 30 días</p>
+      </div>
+
+      <div class="bg-white p-4 sm:p-5 lg:p-6">
+        <div class="mb-3 inline-flex size-10 items-center justify-center rounded-xl bg-orange-50 text-orange-500 sm:mb-4">
+          <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9" />
+          </svg>
+        </div>
+        <p class="text-sm text-gray-500">Deben equipo</p>
+        <p class="mt-1 text-2xl font-semibold text-gray-900 sm:text-3xl">{{ r.conAdeudos.length }}</p>
+        <p class="mt-1 text-xs text-orange-600">No pueden darse de baja así</p>
+      </div>
+
+      <div class="bg-white p-4 sm:p-5 lg:p-6">
+        <div class="mb-3 inline-flex size-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600 sm:mb-4">
+          <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+          </svg>
+        </div>
+        <p class="text-sm text-gray-500">Expedientes pendientes</p>
+        <p class="mt-1 text-2xl font-semibold text-gray-900 sm:text-3xl">{{ r.pendientes.length }}</p>
+        <p class="mt-1 text-xs text-blue-600">Papeles o inducción por completar</p>
+      </div>
+    </section>
+
+    <!-- =========================
+         ADEUDOS + PERSONAL POR ÁREA
+    ========================== -->
+    <div class="grid gap-6 xl:grid-cols-3">
+      <section class="overflow-hidden rounded-2xl border border-gray-200 bg-white xl:col-span-2">
+        <div class="p-5 lg:p-6">
+          <h2 class="text-lg font-semibold text-gray-900">Equipo sin devolver</h2>
+          <p class="mt-1 text-sm text-gray-500">Trabajadores que deben herramienta o EPP (sin contar consumibles).</p>
+        </div>
+        <ul class="divide-y divide-gray-100 border-t border-gray-200">
+          @for (a of r.conAdeudos; track a.trabajador.id) {
+            <li>
+              <a
+                routerLink="/rh/kardex"
+                [queryParams]="{ trabajador: a.trabajador.id }"
+                class="flex flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3.5 transition hover:bg-gray-50 lg:px-6"
+              >
+                <span class="inline-flex size-9 shrink-0 items-center justify-center rounded-full bg-orange-50 text-xs font-semibold text-orange-700">
+                  {{ iniciales(a.trabajador) }}
+                </span>
+                <span class="min-w-0 flex-1 basis-40">
+                  <span class="block truncate text-sm font-medium text-gray-800">
+                    {{ nombreCompleto(a.trabajador) }}
+                    @if (!a.trabajador.activo) {
+                      <span class="ml-1 rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-600">Baja</span>
+                    }
+                  </span>
+                  <span class="block truncate text-xs text-gray-500">{{ a.trabajador.numeroEmpleado }} · {{ a.trabajador.area }}</span>
+                </span>
+                <span class="text-sm text-gray-600">
+                  <strong class="text-gray-900">{{ a.articulos }}</strong> {{ a.articulos === 1 ? 'artículo' : 'artículos' }}
+                </span>
+                <span
+                  class="rounded-full px-2.5 py-1 text-xs font-medium"
+                  [class]="a.diasMayor > 30 ? 'bg-orange-50 text-orange-700' : 'bg-blue-50 text-blue-700'"
+                >
+                  Hace {{ a.diasMayor }} {{ a.diasMayor === 1 ? 'día' : 'días' }}
+                </span>
+              </a>
+            </li>
+          } @empty {
+            <li class="px-5 py-8 text-center text-sm text-gray-500 lg:px-6">Nadie debe equipo.</li>
+          }
+        </ul>
+      </section>
+
+      <section class="rounded-2xl border border-gray-200 bg-white p-5 lg:p-6">
+        <h2 class="text-lg font-semibold text-gray-900">Personal por área</h2>
+        <p class="mt-1 mb-6 text-sm text-gray-500">Solo trabajadores activos.</p>
+        <ul class="space-y-4">
+          @for (a of r.porArea; track a.area) {
+            <li>
+              <div class="mb-2 flex items-baseline justify-between gap-3 text-sm">
+                <span class="font-medium text-gray-800">{{ a.area }}</span>
+                <span class="font-semibold text-gray-900">{{ a.total }}</span>
+              </div>
+              <div class="h-2.5 w-full overflow-hidden rounded-full bg-gray-100">
+                <div class="h-full rounded-full bg-blue-500 transition-all" [style.width.%]="porcentajeArea(a.total)"></div>
+              </div>
+            </li>
+          }
+        </ul>
+      </section>
+    </div>
+
+    <!-- =========================
+         EXPEDIENTES + ALTAS Y BAJAS
+    ========================== -->
+    <div class="grid gap-6 lg:grid-cols-2">
+      <section class="rounded-2xl border border-gray-200 bg-white p-5 lg:p-6">
+        <h2 class="text-lg font-semibold text-gray-900">Expedientes pendientes</h2>
+        <p class="mt-1 mb-5 text-sm text-gray-500">Lo que falta entregar o completar.</p>
+        <ul class="space-y-3">
+          @for (p of r.pendientes; track p.trabajador.id) {
+            <li class="rounded-xl border border-gray-200 p-4">
+              <p class="text-sm font-medium text-gray-800">{{ nombreCompleto(p.trabajador) }}</p>
+              <p class="text-xs text-gray-500">{{ p.trabajador.numeroEmpleado }} · {{ p.trabajador.puesto }}</p>
+              <div class="mt-2 flex flex-wrap gap-1.5">
+                @for (f of p.faltan; track f) {
+                  <span class="rounded-full bg-orange-50 px-2.5 py-1 text-xs font-medium text-orange-700">{{ f }}</span>
+                }
+              </div>
+            </li>
+          } @empty {
+            <li class="py-6 text-center text-sm text-gray-500">Todos los expedientes están completos.</li>
+          }
+        </ul>
+      </section>
+
+      <section class="rounded-2xl border border-gray-200 bg-white p-5 lg:p-6">
+        <h2 class="text-lg font-semibold text-gray-900">Altas y bajas recientes</h2>
+        <p class="mt-1 mb-5 text-sm text-gray-500">Los últimos movimientos de personal.</p>
+        <ul class="divide-y divide-gray-100">
+          @for (x of r.recientes; track x.tipo + x.trabajador.id) {
+            <li class="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
+              <span
+                class="inline-flex size-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold"
+                [class]="x.tipo === 'alta' ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-600'"
+                >{{ iniciales(x.trabajador) }}</span
+              >
+              <div class="min-w-0 flex-1">
+                <p class="truncate text-sm font-medium text-gray-800">{{ nombreCompleto(x.trabajador) }}</p>
+                <p class="truncate text-xs text-gray-500">{{ x.detalle }}</p>
+              </div>
+              <div class="shrink-0 text-right">
+                <span
+                  class="rounded-full px-2.5 py-1 text-xs font-medium"
+                  [class]="x.tipo === 'alta' ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-700'"
+                  >{{ x.tipo === 'alta' ? 'Alta' : 'Baja' }}</span
+                >
+                <p class="mt-1 text-xs text-gray-500">{{ x.fecha | date: 'dd/MM/yy' }}</p>
+              </div>
+            </li>
+          }
+        </ul>
+      </section>
+    </div>
+
+    <!-- =========================
+         MOVIMIENTOS DE ALMACÉN
+    ========================== -->
+    <section class="overflow-hidden rounded-2xl border border-gray-200 bg-white">
+      <div class="p-5 lg:p-6">
+        <h2 class="text-lg font-semibold text-gray-900">Movimientos recientes de almacén</h2>
+        <p class="mt-1 text-sm text-gray-500">Entregas, devoluciones y daños del personal.</p>
+      </div>
+      <ul class="divide-y divide-gray-100 border-t border-gray-200">
+        @for (m of r.movimientos; track m.id) {
+          <li>
+            <a
+              routerLink="/rh/kardex"
+              [queryParams]="{ trabajador: m.trabajadorId }"
+              class="flex flex-wrap items-center gap-x-4 gap-y-1.5 px-5 py-3 transition hover:bg-gray-50 lg:px-6"
+            >
+              <span class="w-24 shrink-0">
+                <span class="inline-flex rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset" [class]="estiloMovimiento[m.tipo].clases">
+                  {{ estiloMovimiento[m.tipo].texto }}
+                </span>
+              </span>
+              <span class="min-w-0 flex-1 basis-48">
+                <span class="block truncate text-sm font-medium text-gray-800">
+                  {{ m.descripcion }} @if (m.cantidad > 1) { ×{{ m.cantidad }} }
+                </span>
+                <span class="block truncate text-xs text-gray-500">
+                  {{ m.trabajador }}{{ m.idSerie ? ' · ' + m.idSerie : '' }} · {{ m.almacen }}
+                </span>
+              </span>
+              <span class="text-xs text-gray-500">{{ m.fecha | date: 'dd/MM/yy HH:mm' }}</span>
+            </a>
+          </li>
+        }
+      </ul>
+    </section>
+  }
+</div>

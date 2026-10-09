@@ -1,4 +1,58 @@
-/* You can add global styles to this file, and also import other style files */
+/* =====================================================
+   ESTILOS GLOBALES
+   Tailwind + DaisyUI. Aquí solo va lo que aplica a TODA
+   la app; cada pantalla usa clases de Tailwind directo.
+===================================================== */
 @import "tailwindcss";
 @plugin "daisyui";
- 
+
+/* Tipografía: Inter (se carga en index.html) con letras de sistema de respaldo */
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+@layer base {
+  html {
+    -webkit-tap-highlight-color: transparent; /* sin destello gris al tocar en celular */
+    scroll-padding-top: 5rem; /* los anclas no quedan debajo de la barra fija */
+  }
+
+  body {
+    @apply bg-slate-50 font-sans text-gray-900 antialiased;
+    font-feature-settings: "cv11", "ss01"; /* números y letras más legibles en Inter */
+  }
+
+  ::selection {
+    @apply bg-blue-500/20;
+  }
+
+  /* Anillo visible SOLO al navegar con teclado (no al tocar o hacer clic) */
+  :where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+    @apply outline-2 outline-offset-2 outline-blue-500;
+  }
+}
+
+/* Barra de desplazamiento horizontal discreta (pestañas, tablas) */
+.sin-barra {
+  scrollbar-width: none;
+}
+.sin-barra::-webkit-scrollbar {
+  display: none;
+}
+
+/* Transición suave al cambiar de página (Angular withViewTransitions) */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 180ms;
+}
+
+/* Quien pidió menos movimiento en su sistema no ve animaciones */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

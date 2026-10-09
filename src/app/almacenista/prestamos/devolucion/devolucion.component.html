@@ -1,0 +1,202 @@
+<!-- =====================================================
+     RECIBIR EQUIPO · condición, notas y fotos (opcionales)
+====================================================== -->
+<div class="min-h-0 flex-1 space-y-3 overflow-y-auto p-3 sm:p-5">
+  <div>
+    <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Registrar devolución</h2>
+    <p class="text-sm text-gray-500 dark:text-gray-400">
+      Marca cómo llegó cada artículo. Las notas y fotos son opcionales.
+    </p>
+  </div>
+
+  @for (f of filas(); track f.indice) {
+    <article
+      class="rounded-2xl border bg-white p-4 dark:bg-neutral-900"
+      [class]="f.condicion === 'danado' ? 'border-orange-300 dark:border-orange-500/40' : 'border-gray-200 dark:border-white/10'"
+    >
+      <!-- Artículo -->
+      <div class="flex items-start justify-between gap-3">
+        <div class="min-w-0">
+          <p class="font-medium text-gray-900 dark:text-white">{{ f.linea.nombre }}</p>
+          <p class="font-mono text-xs text-gray-400">{{ f.linea.serie ?? f.linea.codigo }} · cantidad {{ f.linea.cantidad }}</p>
+        </div>
+        @if (f.costoso) {
+          <span class="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800 dark:bg-amber-500/15 dark:text-amber-300">
+            Alto valor
+          </span>
+        }
+      </div>
+
+      <!-- Condición: botones grandes para tocar con el dedo -->
+      <div class="mt-3 grid grid-cols-2 gap-2" role="radiogroup" [attr.aria-label]="'Cómo llegó ' + f.linea.nombre">
+        <button
+          type="button"
+          role="radio"
+          [attr.aria-checked]="f.condicion === 'bueno'"
+          (click)="cambiar(f.indice, { condicion: 'bueno' })"
+          class="h-11 rounded-xl text-sm font-semibold transition"
+          [class]="f.condicion === 'bueno' ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-white/10 dark:text-gray-300'"
+        >
+          Buen estado
+        </button>
+        <button
+          type="button"
+          role="radio"
+          [attr.aria-checked]="f.condicion === 'danado'"
+          (click)="cambiar(f.indice, { condicion: 'danado', abierto: true })"
+          class="h-11 rounded-xl text-sm font-semibold transition"
+          [class]="f.condicion === 'danado' ? 'bg-orange-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-white/10 dark:text-gray-300'"
+        >
+          Con daños
+        </button>
+      </div>
+
+      @if (f.condicion === 'danado') {
+        @if (f.linea.cantidad > 1) {
+          <label class="mt-3 flex items-center justify-between gap-3 text-sm">
+            <span class="text-gray-700 dark:text-gray-300">¿Cuántas llegaron con daño?</span>
+            <input
+              type="number"
+              inputmode="numeric"
+              min="1"
+              [max]="f.linea.cantidad"
+              [value]="f.danadas"
+              (change)="cambiarDanadas(f, $event)"
+              class="h-11 w-20 rounded-xl border border-gray-200 bg-white px-3 text-center text-base outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/15 dark:border-white/10 dark:bg-neutral-900"
+            />
+          </label>
+        }
+        <p class="mt-3 rounded-lg bg-orange-50 px-3 py-2 text-xs text-orange-700 dark:bg-orange-500/10 dark:text-orange-300">
+          {{ f.linea.serie ? 'La pieza quedará como NO APTA hasta que se revise.' : 'Lo dañado no regresa al stock disponible.' }}
+        </p>
+      }
+
+      <!-- Notas y fotos (opcionales) -->
+      @if (!f.abierto) {
+        <button
+          type="button"
+          (click)="cambiar(f.indice, { abierto: true })"
+          class="mt-3 text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400"
+        >
+          + Agregar notas o fotos
+        </button>
+      } @else {
+        <div class="mt-3 space-y-3">
+          @if (f.costoso && f.condicion === 'bueno' && !f.notas && !f.fotos.length) {
+            <p class="text-xs text-amber-700 dark:text-amber-300">Equipo de alto valor: conviene revisarlo y dejar una foto de cómo llegó.</p>
+          }
+          <label class="block">
+            <span class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
+              Notas <span class="font-normal text-gray-400">(opcional)</span>
+            </span>
+            <textarea
+              rows="2"
+              maxlength="500"
+              [value]="f.notas"
+              (input)="cambiar(f.indice, { notas: valor($event) })"
+              placeholder="Ej. carcasa estrellada, falta el cable, llegó sucio…"
+              class="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-base outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-500/15 sm:text-sm dark:border-white/10 dark:bg-neutral-900 dark:text-white"
+            ></textarea>
+          </label>
+
+          <div>
+            <p class="mb-1.5 text-sm font-medium text-gray-700 dark:text-gray-300">
+              Fotos <span class="font-normal text-gray-400">(opcional, máx. {{ maxFotos }})</span>
+            </p>
+            <div class="grid grid-cols-3 gap-2 sm:grid-cols-4">
+              @for (foto of f.fotos; track $index) {
+                <div class="relative aspect-square overflow-hidden rounded-xl bg-gray-100 dark:bg-white/5">
+                  <img [src]="foto" alt="Foto de la devolución" class="size-full object-cover" />
+                  <button
+                    type="button"
+                    (click)="quitarFoto(f, foto)"
+                    aria-label="Quitar foto"
+                    class="absolute top-1 right-1 inline-flex size-8 items-center justify-center rounded-full bg-black/60 text-white hover:bg-black/80"
+                  >
+                    <svg class="size-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              }
+              @if (f.fotos.length < maxFotos) {
+                <!-- Cámara en vivo -->
+                <button
+                  type="button"
+                  (click)="camaraPara.set(f.indice)"
+                  [disabled]="procesando() !== null"
+                  class="flex aspect-square flex-col items-center justify-center gap-1 rounded-xl bg-blue-600 text-xs font-semibold text-white transition hover:bg-blue-700 disabled:opacity-50"
+                >
+                  <svg class="size-7" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z" />
+                  </svg>
+                  Tomar foto
+                </button>
+
+                <!-- Galería / archivos -->
+                <label
+                  class="flex aspect-square cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-gray-300 text-xs font-medium text-gray-500 transition hover:border-blue-400 hover:text-blue-600 dark:border-white/20 dark:text-gray-400"
+                >
+                  @if (procesando() === f.indice) {
+                    <span>Procesando…</span>
+                  } @else {
+                    <svg class="size-6" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
+                    </svg>
+                    <span>Galería</span>
+                  }
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    class="sr-only"
+                    [disabled]="procesando() !== null"
+                    (change)="agregarFotos(f, $event)"
+                  />
+                </label>
+              }
+            </div>
+          </div>
+        </div>
+      }
+    </article>
+  }
+
+  @if (consumibles().length) {
+    <p class="rounded-xl bg-gray-100 px-4 py-3 text-xs text-gray-600 dark:bg-white/5 dark:text-gray-400">
+      No se devuelven (consumibles):
+      @for (c of consumibles(); track $index) {
+        {{ c.nombre }} ×{{ c.cantidad }}{{ $last ? '.' : ',' }}
+      }
+    </p>
+  }
+
+  @if (error()) {
+    <p class="rounded-xl bg-orange-50 px-4 py-3 text-sm text-orange-700 dark:bg-orange-500/10 dark:text-orange-300" role="alert">{{ error() }}</p>
+  }
+</div>
+
+<!-- Acciones -->
+<div class="flex gap-2 border-t border-gray-200 bg-white p-4 dark:border-white/10 dark:bg-neutral-900">
+  <button
+    type="button"
+    (click)="cancelar.emit()"
+    class="h-12 flex-1 rounded-xl border border-gray-300 text-sm font-semibold dark:border-white/20"
+  >
+    Cancelar
+  </button>
+  <button
+    type="button"
+    (click)="enviar()"
+    [disabled]="procesando() !== null"
+    class="h-12 flex-[2] rounded-xl bg-emerald-600 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-50"
+  >
+    Confirmar devolución
+  </button>
+</div>
+
+<!-- Cámara en vivo para el renglón elegido -->
+@if (camaraPara() !== null) {
+  <app-camara [restantes]="espacioCamara()" (foto)="agregarFoto(camaraPara()!, $event)" (cerrar)="camaraPara.set(null)" />
+}

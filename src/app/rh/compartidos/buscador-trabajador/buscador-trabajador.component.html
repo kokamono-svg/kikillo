@@ -48,7 +48,7 @@
                 <span class="flex size-9 shrink-0 items-center justify-center rounded-full bg-slate-900 text-xs font-semibold text-white">{{ iniciales(t) }}</span>
                 <span class="min-w-0 flex-1">
                   <span class="block truncate text-sm font-medium text-slate-900">{{ nombreCompleto(t) }}</span>
-                  <span class="block truncate text-xs text-slate-500">{{ t.numeroEmpleado }} · {{ t.curp }} · {{ t.area }}</span>
+                  <span class="block truncate text-xs text-slate-500">{{ t.numeroEmpleado }} · NSS {{ t.nss }} · {{ t.area }}</span>
                 </span>
                 @if (!t.activo) {
                   <span class="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 ring-1 ring-slate-400/30">Baja</span>

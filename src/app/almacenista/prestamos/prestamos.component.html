@@ -1,0 +1,211 @@
+<!-- =====================================================
+     PRÉSTAMOS · vales emitidos
+====================================================== -->
+<div class="space-y-6" [class]="detalle() ? 'print:hidden' : ''">
+  <div class="flex flex-col gap-1">
+    <h1 class="text-2xl font-bold tracking-tight text-gray-900 sm:text-3xl dark:text-white">Préstamos</h1>
+    <p class="text-sm text-gray-500 dark:text-gray-400">
+      {{ variosAlmacenes() ? 'Vales de ' + acceso.enVista().length + ' almacenes.' : 'Vales de ' + acceso.actual() + '.' }}
+      @if (!acceso.puedePrestar()) {
+        Solo consulta: tu perfil no registra préstamos ni devoluciones.
+      }
+    </p>
+  </div>
+
+  <!-- ===== Filtros ===== -->
+  <div class="flex flex-col gap-3 lg:flex-row lg:items-center">
+    <div class="relative flex-1 lg:max-w-md">
+      <svg
+        class="pointer-events-none absolute top-1/2 left-3.5 size-5 -translate-y-1/2 text-gray-400"
+        fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"
+      >
+        <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+      </svg>
+      <input
+        type="search"
+        placeholder="Folio, trabajador, No. de empleado o artículo"
+        [value]="busqueda()"
+        (input)="busqueda.set(valor($event))"
+        class="h-11 w-full rounded-xl border border-gray-200 bg-white pr-4 pl-11 text-base text-gray-800 outline-none transition placeholder:text-gray-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/15 sm:text-sm dark:border-white/10 dark:bg-neutral-900 dark:text-white"
+      />
+    </div>
+
+    <div class="flex gap-2 overflow-x-auto pb-1 lg:pb-0">
+      @for (f of filtros; track f.valor) {
+        <button
+          type="button"
+          (click)="filtro.set(f.valor)"
+          [attr.aria-pressed]="filtro() === f.valor"
+          class="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full px-4 text-sm font-medium transition"
+          [class]="claseFiltro(filtro() === f.valor)"
+        >
+          {{ f.texto }}
+          <span class="text-xs opacity-60">{{ conteo()[f.valor] }}</span>
+        </button>
+      }
+    </div>
+  </div>
+
+  <!-- ===== Lista: tarjetas en celular, filas en computadora ===== -->
+  <section class="overflow-hidden rounded-2xl border border-gray-200 bg-white dark:border-white/10 dark:bg-neutral-900">
+    <div
+      class="hidden grid-cols-[minmax(0,2fr)_minmax(0,1.6fr)_minmax(0,0.8fr)_minmax(0,0.8fr)_minmax(0,0.9fr)] gap-4 border-b border-gray-200 bg-gray-50 px-6 py-3 text-sm font-medium text-gray-500 md:grid dark:border-white/10 dark:bg-white/5 dark:text-gray-400"
+    >
+      <span>Trabajador</span>
+      <span>Vale</span>
+      <span>Entrega</span>
+      <span>Devolución</span>
+      <span>Estado</span>
+    </div>
+
+    <ul class="divide-y divide-gray-100 dark:divide-white/10">
+      @for (p of filtrados(); track p.vale.folio) {
+        <li>
+          <button
+            type="button"
+            (click)="abrir(p.vale)"
+            class="grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 px-4 py-3.5 text-left transition hover:bg-gray-50 sm:px-5 md:grid-cols-[minmax(0,2fr)_minmax(0,1.6fr)_minmax(0,0.8fr)_minmax(0,0.8fr)_minmax(0,0.9fr)] md:gap-4 md:px-6 dark:hover:bg-white/5"
+          >
+            <!-- Trabajador -->
+            <span class="contents md:flex md:min-w-0 md:items-center md:gap-2.5">
+              <span class="row-span-2 inline-flex size-9 shrink-0 items-center justify-center rounded-full bg-blue-50 text-xs font-semibold text-blue-700 md:row-span-1 dark:bg-blue-500/10 dark:text-blue-300">
+                {{ iniciales(p.vale.empleado.nombre) }}
+              </span>
+              <span class="min-w-0">
+                <span class="block truncate text-sm font-medium text-gray-800 dark:text-gray-200">{{ p.vale.empleado.nombre }}</span>
+                <span class="block truncate text-xs text-gray-500 dark:text-gray-400">No. {{ p.vale.empleado.numeroEmpleado }}</span>
+              </span>
+            </span>
+
+            <!-- Estado (en celular va a la derecha del nombre) -->
+            <span class="justify-self-end md:order-last md:justify-self-start">
+              <span class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium" [class]="estado[p.estado].etiqueta">
+                <span class="size-1.5 rounded-full" [class]="estado[p.estado].punto"></span>{{ estado[p.estado].texto }}
+              </span>
+            </span>
+
+            <!-- Vale -->
+            <span class="col-start-2 col-end-4 min-w-0 text-xs text-gray-500 md:col-auto md:text-sm dark:text-gray-400">
+              <span class="font-mono font-semibold text-gray-700 dark:text-gray-300">{{ p.vale.folio }}</span>
+              · {{ piezas(p.vale) }} {{ piezas(p.vale) === 1 ? 'pieza' : 'piezas' }}
+              @if (variosAlmacenes()) {
+                <span class="block truncate">{{ p.vale.almacen }}</span>
+              }
+              <!-- Fechas en celular -->
+              <span class="block md:hidden">
+                Entregó {{ p.vale.fecha | date: 'dd/MM/yy' }} · devuelve
+                <span [class]="p.estado === 'vencido' ? 'font-medium text-orange-600 dark:text-orange-400' : ''">{{ p.vale.fechaDevolucion | date: 'dd/MM/yy' }}</span>
+              </span>
+            </span>
+
+            <!-- Fechas en computadora -->
+            <span class="hidden text-sm text-gray-600 md:block dark:text-gray-400">{{ p.vale.fecha | date: 'dd/MM/yy' }}</span>
+            <span
+              class="hidden text-sm md:block"
+              [class]="p.estado === 'vencido' ? 'font-medium text-orange-600 dark:text-orange-400' : 'text-gray-600 dark:text-gray-400'"
+              >{{ p.vale.fechaDevolucion | date: 'dd/MM/yy' }}</span
+            >
+          </button>
+        </li>
+      } @empty {
+        <li class="px-6 py-10 text-center text-sm text-gray-500 dark:text-gray-400">No hay préstamos con esos filtros.</li>
+      }
+    </ul>
+  </section>
+
+  @if (esAdmin) {
+    <p class="text-right">
+      <button type="button" (click)="almacen.reiniciar()" class="text-xs text-gray-400 underline hover:text-orange-500">
+        Reiniciar datos de demo
+      </button>
+    </p>
+  }
+</div>
+
+<!-- =========================================
+     DETALLE DEL VALE
+     Celular: ocupa toda la pantalla. Computadora: ventana centrada.
+     Al imprimir solo sale el vale.
+========================================== -->
+@if (detalle(); as d) {
+  <div
+    class="fixed inset-0 z-50 flex items-end justify-center bg-black/50 sm:items-center sm:p-4 print:static print:block print:bg-transparent print:p-0"
+    (click)="cerrar()"
+    (keydown.escape)="devolviendo() || cerrar()"
+  >
+    <div
+      class="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-t-2xl bg-slate-50 shadow-xl sm:rounded-2xl dark:bg-neutral-950 print:max-h-none print:overflow-visible print:rounded-none print:bg-white print:shadow-none"
+      role="dialog"
+      aria-modal="true"
+      [attr.aria-label]="'Vale ' + d.vale.folio"
+      (click)="$event.stopPropagation()"
+    >
+      <!-- Encabezado y acciones -->
+      <div class="flex flex-wrap items-center gap-2 border-b border-gray-200 bg-white p-4 dark:border-white/10 dark:bg-neutral-900 print:hidden">
+        <div class="min-w-0 flex-1">
+          <p class="font-mono text-sm font-bold text-gray-900 dark:text-white">{{ d.vale.folio }}</p>
+          <p class="text-xs text-gray-500 dark:text-gray-400">
+            @if (d.estado === 'entregado') {
+              Solo consumibles · no se devuelve
+            } @else if (d.vale.devuelto) {
+              Devuelto el {{ d.vale.devuelto | date: 'dd/MM/yyyy HH:mm' }}
+            } @else {
+              {{ estado[d.estado].texto }} · debe regresar el {{ d.vale.fechaDevolucion | date: 'dd/MM/yyyy' }}
+            }
+          </p>
+        </div>
+        <button
+          type="button"
+          (click)="imprimir()"
+          class="h-10 rounded-xl border border-gray-300 px-4 text-sm font-semibold text-gray-700 hover:bg-gray-50 dark:border-white/20 dark:text-gray-200 dark:hover:bg-white/5"
+        >
+          Imprimir
+        </button>
+        <button
+          type="button"
+          (click)="cerrar()"
+          aria-label="Cerrar"
+          class="inline-flex size-10 items-center justify-center rounded-xl text-gray-500 hover:bg-gray-100 dark:hover:bg-white/10"
+        >
+          <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+
+      @if (devolviendo()) {
+        <!-- Formulario de recepción: condición, notas y fotos -->
+        <app-devolucion class="print:hidden" [vale]="d.vale" (cancelar)="devolviendo.set(false)" (confirmar)="devolver(d.vale, $event)" />
+      } @else {
+        <div class="overflow-y-auto p-3 sm:p-5 print:overflow-visible print:p-0">
+          <app-vale-impreso [vale]="d.vale" />
+        </div>
+
+        <!-- Devolución (solo admin y almacenista; los consumibles no se devuelven) -->
+        @if (acceso.puedePrestar() && !d.vale.devuelto && d.estado !== 'entregado') {
+          <div class="border-t border-gray-200 bg-white p-4 dark:border-white/10 dark:bg-neutral-900 print:hidden">
+            <button
+              type="button"
+              (click)="devolviendo.set(true)"
+              class="h-12 w-full rounded-xl bg-emerald-600 text-sm font-semibold text-white transition hover:bg-emerald-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500"
+            >
+              Registrar devolución
+            </button>
+          </div>
+        }
+      }
+    </div>
+  </div>
+}
+
+<!-- Aviso flotante (verde = ok, naranja = alerta) -->
+@if (aviso(); as a) {
+  <div class="fixed inset-x-4 bottom-6 z-[60] mx-auto max-w-md lg:top-20 lg:bottom-auto print:hidden" role="status">
+    <div
+      class="rounded-xl px-4 py-3 text-sm font-medium text-white shadow-lg"
+      [class]="a.tipo === 'ok' ? 'bg-emerald-600' : 'bg-orange-500'"
+    >
+      {{ a.texto }}
+    </div>
+  </div>
+}

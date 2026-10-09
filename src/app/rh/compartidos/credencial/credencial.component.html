@@ -1,0 +1,103 @@
+<!-- =====================================================
+     CREDENCIAL · frente y reverso (proporción de tarjeta 85.6 × 54)
+     Los tamaños de letra van en cqw (% del ancho de la tarjeta):
+     así se ve igual en celular, en pantalla grande y al imprimir.
+====================================================== -->
+<div class="grid max-w-4xl gap-4 sm:grid-cols-2 print:flex print:max-w-none print:gap-[4mm]">
+  <!-- ===================== FRENTE ===================== -->
+  <article class="@container relative flex aspect-[85.6/54] w-full flex-col overflow-hidden rounded-[3.5cqw] bg-white text-gray-900 shadow-lg ring-1 ring-gray-300 print:w-[85.6mm] print:rounded-[3mm] print:shadow-none">
+    <!-- Marca de agua -->
+    <div class="pointer-events-none absolute -right-[10cqw] -bottom-[18cqw] size-[60cqw] rounded-full border-[6cqw] border-blue-50"></div>
+
+    <!-- Encabezado -->
+    <div class="relative flex items-start gap-[3cqw] px-[3.5cqw] pt-[3cqw] pb-[1.5cqw]">
+      @if (trabajador().foto) {
+        <img [src]="trabajador().foto" alt="" class="size-[17cqw] shrink-0 rounded-[2cqw] object-cover ring-1 ring-gray-200" />
+      } @else {
+        <span class="inline-flex size-[17cqw] shrink-0 items-center justify-center rounded-[2cqw] bg-linear-to-br from-blue-600 to-blue-800 text-[6cqw] font-bold text-white">{{ iniciales() }}</span>
+      }
+      <div class="min-w-0 flex-1 pt-[1cqw]">
+        <p class="text-[4.2cqw] leading-tight font-extrabold tracking-wide">IMHOTEP</p>
+        <p class="text-[2.8cqw] leading-tight text-gray-500">Mantenimiento Industrial</p>
+        <p class="mt-[1cqw] text-[3.2cqw] leading-tight font-bold text-blue-700">Credencial de trabajador</p>
+      </div>
+      <img src="images/logo.jpg" alt="" class="size-[11cqw] shrink-0 rounded-[1.5cqw] object-contain" />
+    </div>
+
+    <!-- Nombre -->
+    <div class="relative bg-linear-to-r from-blue-700 via-blue-600 to-emerald-500 px-[3.5cqw] py-[1.4cqw]">
+      <p class="truncate text-right text-[3.6cqw] font-bold tracking-wide text-white uppercase">{{ nombre() }}</p>
+    </div>
+
+    <!-- Datos + QR -->
+    <div class="relative flex items-end gap-[3cqw] px-[3.5cqw] pt-[2cqw]">
+      <dl class="min-w-0 flex-1 rounded-[2cqw] bg-slate-50 px-[2.5cqw] py-[1.6cqw] text-[2.4cqw] leading-[1.35] ring-1 ring-slate-200">
+        <div class="flex gap-[1.2cqw]"><dt class="shrink-0 font-bold">NSS:</dt><dd class="truncate">{{ trabajador().nss }}</dd></div>
+        <div class="flex gap-[1.2cqw]"><dt class="shrink-0 font-bold">N° de Tarjeta:</dt><dd class="truncate font-mono">{{ trabajador().numeroTarjeta || '—' }}</dd></div>
+        <div class="flex gap-[1.2cqw]"><dt class="shrink-0 font-bold">Compañía:</dt><dd class="line-clamp-2">{{ trabajador().compania }}</dd></div>
+        <div class="flex gap-[1.2cqw]"><dt class="shrink-0 font-bold">Administrador:</dt><dd class="truncate">{{ trabajador().administrador || '—' }}</dd></div>
+        <div class="flex gap-[1.2cqw]"><dt class="shrink-0 font-bold">Fecha de emisión:</dt><dd>{{ trabajador().fechaEmision ? (trabajador().fechaEmision | date: 'yyyy/MM/dd') : '—' }}</dd></div>
+      </dl>
+      <div class="flex shrink-0 flex-col items-center">
+        @if (qr()) {
+          <img [src]="qr()" [alt]="'QR tarjeta ' + trabajador().numeroTarjeta" class="size-[19cqw]" />
+        }
+        <span class="mt-[0.6cqw] font-mono text-[2.2cqw] font-bold">{{ trabajador().numeroTarjeta }}</span>
+      </div>
+    </div>
+
+    <p class="relative mt-auto pb-[1.6cqw] text-center text-[2.1cqw] font-semibold text-gray-600">
+      Documento personal e intransferible.
+    </p>
+  </article>
+
+  <!-- ===================== REVERSO (KARDEX) ===================== -->
+  <article class="@container relative flex aspect-[85.6/54] w-full flex-col overflow-hidden rounded-[3.5cqw] bg-white text-gray-900 shadow-lg ring-1 ring-gray-300 print:w-[85.6mm] print:rounded-[3mm] print:shadow-none">
+    <div class="bg-linear-to-r from-blue-700 to-emerald-500 px-[3.5cqw] py-[1.6cqw] text-center">
+      <p class="text-[4.4cqw] font-extrabold tracking-wide text-white">Kardex</p>
+      <p class="text-[2.4cqw] font-medium text-white/85">Cursos de seguridad</p>
+    </div>
+
+    <table class="mx-[3.5cqw] mt-[2cqw] text-left text-[2.5cqw]">
+      <thead>
+        <tr class="text-[2.7cqw] text-blue-700">
+          <th class="w-[17%] pb-[0.8cqw] font-bold">ID</th>
+          <th class="pb-[0.8cqw] font-bold">Nombre del curso</th>
+          <th class="w-[20%] pb-[0.8cqw] text-right font-bold">Vigencia</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (c of cursos(); track c.clave) {
+          <tr class="border-t border-gray-200">
+            <td class="py-[0.6cqw] font-mono font-bold text-blue-700">{{ c.folio }}</td>
+            <td class="truncate py-[0.6cqw]">{{ nombreCurso(c.clave) }}</td>
+            <td class="py-[0.6cqw] text-right font-semibold" [class]="vigente(c) ? 'text-gray-900' : 'text-red-600 line-through'">
+              {{ c.vigencia | date: 'dd.MM.yyyy' }}
+            </td>
+          </tr>
+        } @empty {
+          <tr class="border-t border-gray-200">
+            <td colspan="3" class="py-[2cqw] text-center text-gray-400">Sin cursos registrados</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+
+    <!-- Casillas y firmas -->
+    <div class="mt-auto grid grid-cols-[auto_1fr_1fr_auto] items-end gap-[2.5cqw] px-[3.5cqw] pb-[1.4cqw] text-[2.2cqw]">
+      <span class="inline-flex items-center gap-[0.8cqw]">
+        Reglas de Oro
+        <span class="inline-flex size-[3cqw] items-center justify-center rounded-[0.5cqw] border border-gray-500 text-[2.4cqw] leading-none font-bold text-blue-700">{{ trabajador().reglasOro ? '✓' : '' }}</span>
+      </span>
+      <span class="border-t border-gray-500 pt-[0.4cqw] text-center">Firma interesado</span>
+      <span class="border-t border-gray-500 pt-[0.4cqw] text-center">Firma administrador</span>
+      <span class="inline-flex items-center gap-[0.8cqw]">
+        FPS Nivel 0
+        <span class="inline-flex size-[3cqw] items-center justify-center rounded-[0.5cqw] border border-gray-500 text-[2.4cqw] leading-none font-bold text-blue-700">{{ trabajador().fpsNivel0 ? '✓' : '' }}</span>
+      </span>
+    </div>
+    <p class="px-[3.5cqw] pb-[1.6cqw] text-center text-[1.9cqw] leading-tight font-semibold text-gray-600">
+      Prohibido modificar, alterar o duplicar esta credencial. Su mal uso puede suspender el acceso del trabajador.
+    </p>
+  </article>
+</div>

@@ -1,0 +1,174 @@
+<!-- =====================================================
+     INVENTARIO · stock por artículo
+====================================================== -->
+<div class="space-y-6">
+  <div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+    <div>
+      <h1 class="text-2xl font-bold tracking-tight text-gray-900 sm:text-3xl dark:text-white">Inventario</h1>
+      <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+        {{ variosAlmacenes() ? 'Suma de ' + acceso.enVista().length + ' almacenes. Elige uno arriba para ver solo el suyo.' : acceso.actual() }}
+      </p>
+    </div>
+    @if (acceso.puedePrestar()) {
+      <a
+        routerLink="/almacen/agregar"
+        class="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 text-sm font-semibold text-white shadow-lg shadow-blue-600/25 transition hover:-translate-y-0.5 hover:bg-blue-700"
+      >
+        <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
+        Agregar artículo
+      </a>
+    }
+  </div>
+
+  <!-- ===== Filtros ===== -->
+  <div class="flex flex-col gap-3 lg:flex-row lg:items-center">
+    <div class="relative flex-1 lg:max-w-md">
+      <svg
+        class="pointer-events-none absolute top-1/2 left-3.5 size-5 -translate-y-1/2 text-gray-400"
+        fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"
+      >
+        <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+      </svg>
+      <input
+        type="search"
+        placeholder="Buscar artículo, código o serie"
+        [value]="busqueda()"
+        (input)="busqueda.set(valor($event))"
+        class="h-11 w-full rounded-xl border border-gray-200 bg-white pr-4 pl-11 text-base text-gray-800 outline-none transition placeholder:text-gray-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/15 sm:text-sm dark:border-white/10 dark:bg-neutral-900 dark:text-white"
+      />
+    </div>
+
+    <div class="flex gap-2 overflow-x-auto pb-1 lg:pb-0">
+      <button type="button" (click)="tipo.set('')" class="h-9 shrink-0 rounded-full px-4 text-sm font-medium transition" [class]="claseFiltro(tipo() === '')">Todos</button>
+      <button type="button" (click)="tipo.set('Herramienta')" class="h-9 shrink-0 rounded-full px-4 text-sm font-medium transition" [class]="claseFiltro(tipo() === 'Herramienta')">Herramienta</button>
+      <button type="button" (click)="tipo.set('EPP')" class="h-9 shrink-0 rounded-full px-4 text-sm font-medium transition" [class]="claseFiltro(tipo() === 'EPP')">EPP</button>
+      <button type="button" (click)="tipo.set('Consumible')" class="h-9 shrink-0 rounded-full px-4 text-sm font-medium transition" [class]="claseFiltro(tipo() === 'Consumible')">Consumibles</button>
+      <button
+        type="button"
+        (click)="soloBajo.set(!soloBajo())"
+        [attr.aria-pressed]="soloBajo()"
+        class="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full px-4 text-sm font-medium transition"
+        [class]="soloBajo() ? 'bg-orange-500 text-white' : 'bg-orange-50 text-orange-700 ring-1 ring-orange-200 hover:bg-orange-100 dark:bg-orange-500/10 dark:text-orange-300 dark:ring-orange-500/30'"
+      >
+        Stock bajo
+        <span class="rounded-full px-1.5 text-xs" [class]="soloBajo() ? 'bg-white/20' : 'bg-orange-100 dark:bg-orange-500/20'">{{ cuantosBajo() }}</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- ===== Lista: tarjetas en celular, tabla en computadora ===== -->
+  <section class="overflow-hidden rounded-2xl border border-gray-200 bg-white dark:border-white/10 dark:bg-neutral-900">
+    <!-- Encabezados (solo computadora) -->
+    <div
+      class="hidden grid-cols-[minmax(0,2.2fr)_repeat(3,minmax(0,0.8fr))_minmax(0,1.6fr)] gap-4 border-b border-gray-200 bg-gray-50 px-6 py-3 text-sm font-medium text-gray-500 md:grid dark:border-white/10 dark:bg-white/5 dark:text-gray-400"
+    >
+      <span>Artículo</span>
+      <span class="text-right">Disponibles</span>
+      <span class="text-right">Prestados</span>
+      <span class="text-right" title="Piezas no aptas o unidades que regresaron dañadas">No aptos</span>
+      <span>{{ variosAlmacenes() ? 'Por almacén' : 'Disponibilidad' }}</span>
+    </div>
+
+    <ul class="divide-y divide-gray-100 dark:divide-white/10">
+      @for (r of filtrados(); track r.codigo) {
+        <li class="px-4 py-4 sm:px-5 md:px-6">
+          <div class="grid gap-3 md:grid-cols-[minmax(0,2.2fr)_repeat(3,minmax(0,0.8fr))_minmax(0,1.6fr)] md:items-center md:gap-4">
+            <!-- Artículo -->
+            <div class="flex min-w-0 items-start justify-between gap-3">
+              <div class="min-w-0">
+                <p class="font-medium text-gray-900 dark:text-white">{{ r.nombre }}</p>
+                <p class="font-mono text-xs text-gray-400">
+                  {{ r.codigo }} · máx. {{ r.limite }} por vale
+                  @if (!variosAlmacenes()) {
+                    · <a
+                      routerLink="/almacen/etiquetas"
+                      [queryParams]="{ codigo: r.codigo, almacen: acceso.actual() }"
+                      class="font-sans font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400"
+                      >Etiquetas</a>
+                  }
+                </p>
+              </div>
+              <span
+                class="shrink-0 rounded-full px-2 py-0.5 text-xs font-medium"
+                [class]="claseTipo[r.tipo]"
+                >{{ r.tipo }}</span
+              >
+            </div>
+
+            <!-- Cifras: en celular van en una fila de 3 con su etiqueta -->
+            <div class="grid grid-cols-3 gap-2 md:contents">
+              <div class="rounded-xl bg-gray-50 px-3 py-2 md:bg-transparent md:p-0 md:text-right dark:bg-white/5 md:dark:bg-transparent">
+                <p class="text-[11px] text-gray-500 md:hidden dark:text-gray-400">Disponibles</p>
+                <p class="text-lg font-semibold md:text-sm" [class]="r.bajo ? 'text-orange-600 dark:text-orange-400' : 'text-gray-900 dark:text-white'">
+                  {{ r.disponibles }}
+                </p>
+              </div>
+              <div class="rounded-xl bg-gray-50 px-3 py-2 md:bg-transparent md:p-0 md:text-right dark:bg-white/5 md:dark:bg-transparent">
+                <p class="text-[11px] text-gray-500 md:hidden dark:text-gray-400">Prestados</p>
+                @if (r.tipo === 'Consumible') {
+                  <p class="text-lg font-semibold text-gray-400 md:text-sm" title="Los consumibles se entregan, no se prestan">—</p>
+                } @else {
+                  <p class="text-lg font-semibold text-blue-700 md:text-sm dark:text-blue-300">{{ r.prestadas }}</p>
+                }
+              </div>
+              <div class="rounded-xl bg-gray-50 px-3 py-2 md:bg-transparent md:p-0 md:text-right dark:bg-white/5 md:dark:bg-transparent">
+                <p class="text-[11px] text-gray-500 md:hidden dark:text-gray-400">No aptos / dañados</p>
+                <p class="text-lg font-semibold md:text-sm" [class]="r.noAptas ? 'text-orange-600 dark:text-orange-400' : 'text-gray-400'">{{ r.noAptas }}</p>
+              </div>
+            </div>
+
+            <!-- Barra o reparto por almacén -->
+            @if (variosAlmacenes()) {
+              <div class="flex flex-wrap gap-1.5">
+                @for (p of r.porAlmacen; track p.almacen) {
+                  <button
+                    type="button"
+                    (click)="acceso.elegir(p.almacen)"
+                    [title]="p.almacen + ': ' + p.disponibles + ' disponibles'"
+                    class="rounded-lg px-2 py-1 text-xs transition hover:ring-2 hover:ring-blue-500/30"
+                    [class]="p.bajo ? 'bg-orange-50 text-orange-700 dark:bg-orange-500/10 dark:text-orange-300' : 'bg-gray-100 text-gray-700 dark:bg-white/10 dark:text-gray-300'"
+                  >
+                    {{ corto(p.almacen) }} <strong>{{ p.disponibles }}</strong>
+                  </button>
+                }
+              </div>
+            } @else {
+              <div class="flex items-center gap-3">
+                <div class="h-2.5 flex-1 overflow-hidden rounded-full bg-gray-100 dark:bg-white/10">
+                  <div class="h-full rounded-full transition-all" [class]="colorBarra(r)" [style.width.%]="porcentaje(r)"></div>
+                </div>
+                <span class="w-10 text-right text-xs text-gray-500 dark:text-gray-400">{{ porcentaje(r) }}%</span>
+              </div>
+            }
+          </div>
+
+          <!-- Piezas con código individual (arneses, bandolas...) -->
+          @if (r.piezas.length) {
+            <div class="mt-3 flex flex-wrap gap-1.5">
+              @for (p of r.piezas.slice(0, 12); track p.serie) {
+                <span
+                  class="rounded-lg border px-2 py-1 font-mono text-[11px]"
+                  [class]="clasePieza(p)"
+                  [title]="textoPieza(p) + ' · última inspección ' + p.ultimaInspeccion"
+                  >{{ p.serie }}</span
+                >
+              }
+              @if (r.piezas.length > 12) {
+                <span class="self-center text-xs text-gray-400">+{{ r.piezas.length - 12 }} más · busca la serie arriba</span>
+              }
+            </div>
+          }
+        </li>
+      } @empty {
+        <li class="px-6 py-10 text-center text-sm text-gray-500 dark:text-gray-400">No hay artículos con esos filtros.</li>
+      }
+    </ul>
+  </section>
+
+  <!-- Leyenda de colores de las piezas -->
+  <p class="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500 dark:text-gray-400">
+    <span class="inline-flex items-center gap-1.5"><span class="size-2 rounded-full bg-emerald-500"></span>Pieza disponible</span>
+    <span class="inline-flex items-center gap-1.5"><span class="size-2 rounded-full bg-blue-500"></span>Prestada</span>
+    <span class="inline-flex items-center gap-1.5"><span class="size-2 rounded-full bg-orange-400"></span>No apta (no se entrega)</span>
+  </p>
+</div>

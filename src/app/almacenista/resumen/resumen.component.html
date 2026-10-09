@@ -1,0 +1,275 @@
+<!-- =====================================================
+     RESUMEN DEL ALMACÉN (mismo estilo que el dashboard)
+====================================================== -->
+<div class="space-y-6">
+  <!-- Título y acción principal -->
+  <div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+    <div class="min-w-0">
+      <h1 class="text-2xl font-bold tracking-tight text-gray-900 sm:text-3xl dark:text-white">
+        {{ acceso.actual() || 'Todos los almacenes' }}
+      </h1>
+      <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+        Stock en tiempo real y préstamos activos de herramientas y equipos.
+      </p>
+    </div>
+
+    @if (acceso.puedePrestar()) {
+      <a
+        routerLink="/almacen/nuevo"
+        class="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 text-sm font-semibold text-white shadow-lg shadow-blue-600/25 transition hover:-translate-y-0.5 hover:bg-blue-700 hover:shadow-xl hover:shadow-blue-600/30 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 active:translate-y-0"
+      >
+        <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+        </svg>
+        Registrar préstamo
+      </a>
+    }
+  </div>
+
+  @if (acceso.enVista().length === 0) {
+    <p class="rounded-2xl border border-dashed border-gray-300 p-8 text-center text-sm text-gray-500 dark:border-white/20 dark:text-gray-400">
+      Tu usuario no tiene un almacén asignado. Pide al administrador que te asigne uno.
+    </p>
+  } @else {
+    <!-- =========================
+         INDICADORES (4 en una franja; 2×2 en celular)
+    ========================== -->
+    <section
+      aria-label="Resumen"
+      class="grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-gray-200 bg-gray-200 lg:grid-cols-4 dark:border-white/10 dark:bg-white/10"
+    >
+      <div class="bg-white p-4 sm:p-5 lg:p-6 dark:bg-neutral-900">
+        <div class="mb-3 inline-flex size-10 items-center justify-center rounded-xl bg-neutral-900 text-white sm:mb-4 dark:bg-white dark:text-neutral-900">
+          <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9" />
+          </svg>
+        </div>
+        <p class="text-sm text-gray-500 dark:text-gray-400">Unidades registradas</p>
+        <p class="mt-1 text-2xl font-semibold text-gray-900 sm:text-3xl dark:text-white">{{ total().unidades }}</p>
+        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+          {{ variosAlmacenes() ? 'En ' + acceso.enVista().length + ' almacenes' : 'En este almacén' }}
+        </p>
+      </div>
+
+      <div class="bg-white p-4 sm:p-5 lg:p-6 dark:bg-neutral-900">
+        <div class="mb-3 inline-flex size-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 sm:mb-4 dark:bg-emerald-500/10 dark:text-emerald-400">
+          <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        </div>
+        <p class="text-sm text-gray-500 dark:text-gray-400">Disponibles</p>
+        <p class="mt-1 text-2xl font-semibold text-gray-900 sm:text-3xl dark:text-white">{{ total().disponibles }}</p>
+        <p class="mt-1 text-xs text-emerald-600 dark:text-emerald-400">Listos para prestar</p>
+      </div>
+
+      <div class="bg-white p-4 sm:p-5 lg:p-6 dark:bg-neutral-900">
+        <div class="mb-3 inline-flex size-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600 sm:mb-4 dark:bg-blue-500/10 dark:text-blue-400">
+          <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" />
+          </svg>
+        </div>
+        <p class="text-sm text-gray-500 dark:text-gray-400">Prestados ahora</p>
+        <p class="mt-1 text-2xl font-semibold text-gray-900 sm:text-3xl dark:text-white">{{ total().prestadas }}</p>
+        <p class="mt-1 text-xs text-blue-600 dark:text-blue-400">
+          En {{ total().activos + total().vencidos }} vales abiertos
+        </p>
+      </div>
+
+      <div class="bg-white p-4 sm:p-5 lg:p-6 dark:bg-neutral-900">
+        <div class="mb-3 inline-flex size-10 items-center justify-center rounded-xl bg-orange-50 text-orange-500 sm:mb-4 dark:bg-orange-500/10 dark:text-orange-400">
+          <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        </div>
+        <p class="text-sm text-gray-500 dark:text-gray-400">Devoluciones vencidas</p>
+        <p class="mt-1 text-2xl font-semibold text-gray-900 sm:text-3xl dark:text-white">{{ total().vencidos }}</p>
+        <p class="mt-1 text-xs text-orange-600 dark:text-orange-400">Pasaron su fecha de entrega</p>
+      </div>
+    </section>
+
+    <!-- =========================
+         ALMACENES (solo cuando se ven varios)
+    ========================== -->
+    @if (variosAlmacenes()) {
+      <section aria-labelledby="titulo-almacenes">
+        <div class="mb-4">
+          <h2 id="titulo-almacenes" class="text-lg font-semibold text-gray-900 dark:text-white">Almacenes</h2>
+          <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Toca un almacén para ver solo su información.</p>
+        </div>
+
+        <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          @for (r of resumenes(); track r.almacen) {
+            <button
+              type="button"
+              (click)="acceso.elegir(r.almacen)"
+              class="group rounded-2xl border border-gray-200 bg-white p-5 text-left transition hover:-translate-y-0.5 hover:border-blue-400 hover:shadow-lg hover:shadow-blue-600/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 dark:border-white/10 dark:bg-neutral-900 dark:hover:border-blue-500/60"
+            >
+              <div class="flex items-start justify-between gap-3">
+                <h3 class="font-semibold text-gray-900 dark:text-white">{{ r.almacen }}</h3>
+                <span class="text-gray-400 transition group-hover:translate-x-0.5 group-hover:text-blue-500">›</span>
+              </div>
+
+              <div class="mt-4 mb-2 flex items-baseline justify-between gap-3 text-sm">
+                <span class="text-gray-500 dark:text-gray-400">Disponibles</span>
+                <span class="text-gray-500 dark:text-gray-400">
+                  <span class="font-semibold text-gray-900 dark:text-white">{{ r.disponibles }}</span> de {{ r.unidades }}
+                </span>
+              </div>
+              <div class="h-2.5 w-full overflow-hidden rounded-full bg-gray-100 dark:bg-white/10">
+                <div
+                  class="h-full rounded-full transition-all"
+                  [class]="colorBarra(porcentaje(r.disponibles, r.unidades))"
+                  [style.width.%]="porcentaje(r.disponibles, r.unidades)"
+                ></div>
+              </div>
+
+              <dl class="mt-4 grid grid-cols-3 gap-2 text-center">
+                <div class="rounded-xl bg-blue-50 px-2 py-2 dark:bg-blue-500/10">
+                  <dt class="text-[11px] text-blue-700 dark:text-blue-300">Prestados</dt>
+                  <dd class="text-lg font-semibold text-blue-700 dark:text-blue-300">{{ r.prestadas }}</dd>
+                </div>
+                <div class="rounded-xl px-2 py-2" [class]="r.vencidos ? 'bg-orange-50 dark:bg-orange-500/10' : 'bg-gray-50 dark:bg-white/5'">
+                  <dt class="text-[11px]" [class]="r.vencidos ? 'text-orange-700 dark:text-orange-300' : 'text-gray-500 dark:text-gray-400'">Vencidos</dt>
+                  <dd class="text-lg font-semibold" [class]="r.vencidos ? 'text-orange-700 dark:text-orange-300' : 'text-gray-700 dark:text-gray-300'">{{ r.vencidos }}</dd>
+                </div>
+                <div class="rounded-xl px-2 py-2" [class]="r.stockBajo.length ? 'bg-orange-50 dark:bg-orange-500/10' : 'bg-gray-50 dark:bg-white/5'">
+                  <dt class="text-[11px]" [class]="r.stockBajo.length ? 'text-orange-700 dark:text-orange-300' : 'text-gray-500 dark:text-gray-400'">Stock bajo</dt>
+                  <dd class="text-lg font-semibold" [class]="r.stockBajo.length ? 'text-orange-700 dark:text-orange-300' : 'text-gray-700 dark:text-gray-300'">{{ r.stockBajo.length }}</dd>
+                </div>
+              </dl>
+            </button>
+          }
+        </div>
+      </section>
+    }
+
+    <!-- =========================
+         DISPONIBILIDAD + STOCK BAJO
+    ========================== -->
+    <div class="grid gap-6 xl:grid-cols-3">
+      <section class="rounded-2xl border border-gray-200 bg-white p-5 xl:col-span-2 lg:p-6 dark:border-white/10 dark:bg-neutral-900">
+        <div class="mb-6 flex items-start justify-between gap-4">
+          <div>
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Disponibilidad por tipo</h2>
+            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Unidades disponibles frente al total.</p>
+          </div>
+          <a routerLink="/almacen/inventario" class="shrink-0 text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300">
+            Ver inventario
+          </a>
+        </div>
+
+        <ul class="space-y-5">
+          @for (t of porTipo(); track t.tipo) {
+            <li>
+              <div class="mb-2 flex items-baseline justify-between gap-3">
+                <span class="text-sm font-medium text-gray-800 dark:text-gray-200">{{ t.tipo === 'EPP' ? 'Equipo de protección personal' : 'Herramienta' }}</span>
+                <span class="text-sm text-gray-500 dark:text-gray-400">
+                  <span class="font-semibold" [class]="t.porcentaje < 40 ? 'text-orange-600 dark:text-orange-400' : 'text-gray-900 dark:text-white'">{{ t.disponibles }}</span>
+                  de {{ t.total }}
+                </span>
+              </div>
+              <div class="h-2.5 w-full overflow-hidden rounded-full bg-gray-100 dark:bg-white/10">
+                <div class="h-full rounded-full transition-all" [class]="colorBarra(t.porcentaje)" [style.width.%]="t.porcentaje"></div>
+              </div>
+            </li>
+          }
+        </ul>
+
+        @if (total().noAptas) {
+          <p class="mt-6 rounded-xl bg-orange-50 px-4 py-3 text-sm text-orange-700 dark:bg-orange-500/10 dark:text-orange-300">
+            {{ total().noAptas }} {{ total().noAptas === 1 ? 'unidad está marcada' : 'unidades están marcadas' }} como
+            <strong>no apta o dañada</strong> y no se pueden entregar hasta revisarlas.
+          </p>
+        }
+      </section>
+
+      <section class="rounded-2xl border border-gray-200 bg-white p-5 lg:p-6 dark:border-white/10 dark:bg-neutral-900">
+        <div class="mb-5 flex items-center gap-3">
+          <div class="inline-flex size-10 shrink-0 items-center justify-center rounded-xl bg-orange-50 text-orange-500 dark:bg-orange-500/10 dark:text-orange-400">
+            <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.008v.008H12v-.008z" />
+            </svg>
+          </div>
+          <div class="min-w-0 flex-1">
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Stock bajo</h2>
+            <p class="text-sm text-gray-500 dark:text-gray-400">Conviene reponer pronto</p>
+          </div>
+          @if (stockBajo().length) {
+            <span class="shrink-0 rounded-full bg-orange-100 px-2.5 py-0.5 text-sm font-semibold text-orange-700 dark:bg-orange-500/15 dark:text-orange-300">{{ stockBajo().length }}</span>
+          }
+        </div>
+
+        <!-- Si hay muchos se desplaza; el degradado de abajo avisa que hay más -->
+        <ul
+          class="max-h-96 divide-y divide-gray-100 overflow-y-auto pr-1 dark:divide-white/10"
+          [style.mask-image]="stockBajo().length > 6 ? 'linear-gradient(to bottom, black 85%, transparent)' : null"
+        >
+          @for (s of stockBajo(); track s.almacen + s.articulo.codigo) {
+            <li class="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-6">
+              <div class="min-w-0">
+                <p class="truncate text-sm font-medium text-gray-800 dark:text-gray-200">{{ s.articulo.nombre }}</p>
+                <p class="truncate text-xs text-gray-500 dark:text-gray-400">
+                  {{ variosAlmacenes() ? s.almacen : s.articulo.tipo }}
+                </p>
+              </div>
+              <span class="shrink-0 rounded-full bg-orange-50 px-2.5 py-1 text-xs font-medium text-orange-700 dark:bg-orange-500/10 dark:text-orange-300">
+                {{ s.disponibles === 0 ? 'Agotado' : 'Quedan ' + s.disponibles }}
+              </span>
+            </li>
+          } @empty {
+            <li class="py-6 text-center text-sm text-gray-500 dark:text-gray-400">Todo el stock está en buen nivel.</li>
+          }
+        </ul>
+      </section>
+    </div>
+
+    <!-- =========================
+         PRÉSTAMOS RECIENTES
+    ========================== -->
+    <section class="overflow-hidden rounded-2xl border border-gray-200 bg-white dark:border-white/10 dark:bg-neutral-900">
+      <div class="flex items-center justify-between gap-4 p-5 lg:p-6">
+        <div>
+          <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Préstamos recientes</h2>
+          <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Quién tiene el equipo y cuándo debe devolverlo.</p>
+        </div>
+        <a routerLink="/almacen/prestamos" class="shrink-0 text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300">
+          Ver todos
+        </a>
+      </div>
+
+      <ul class="divide-y divide-gray-100 border-t border-gray-200 dark:divide-white/10 dark:border-white/10">
+        @for (v of recientes(); track v.folio) {
+          <li>
+            <a
+              routerLink="/almacen/prestamos"
+              [queryParams]="{ folio: v.folio }"
+              class="flex flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3.5 transition hover:bg-gray-50 lg:px-6 dark:hover:bg-white/5"
+            >
+              <span class="inline-flex size-9 shrink-0 items-center justify-center rounded-full bg-blue-50 text-xs font-semibold text-blue-700 dark:bg-blue-500/10 dark:text-blue-300">
+                {{ iniciales(v.empleado.nombre) }}
+              </span>
+              <span class="min-w-0 flex-1 basis-40">
+                <span class="block truncate text-sm font-medium text-gray-800 dark:text-gray-200">{{ v.empleado.nombre }}</span>
+                <span class="block truncate text-xs text-gray-500 dark:text-gray-400">
+                  {{ v.folio }} · {{ v.lineas.length }} {{ v.lineas.length === 1 ? 'artículo' : 'artículos' }}
+                  @if (variosAlmacenes()) {
+                    · {{ v.almacen }}
+                  }
+                </span>
+              </span>
+              <span class="text-xs text-gray-500 sm:text-sm dark:text-gray-400">
+                Entrega
+                <span [class]="estadoVale(v) === 'vencido' ? 'font-medium text-orange-600 dark:text-orange-400' : ''">{{ v.fechaDevolucion | date: 'dd/MM/yy' }}</span>
+              </span>
+              <span class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium" [class]="estado[estadoVale(v)].etiqueta">
+                <span class="size-1.5 rounded-full" [class]="estado[estadoVale(v)].punto"></span>{{ estado[estadoVale(v)].texto }}
+              </span>
+            </a>
+          </li>
+        } @empty {
+          <li class="px-5 py-8 text-center text-sm text-gray-500 lg:px-6 dark:text-gray-400">Todavía no hay préstamos.</li>
+        }
+      </ul>
+    </section>
+  }
+</div>

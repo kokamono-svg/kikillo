@@ -2,7 +2,7 @@
 <div class="space-y-6">
   <div>
     <h2 class="text-xl font-bold text-slate-900">Alta de trabajador</h2>
-    <p class="mt-1 text-sm text-slate-500">El número de empleado se genera automáticamente al guardar.</p>
+    <p class="mt-1 text-sm text-slate-500">Alta rápida: solo lo necesario para empezar. El número de empleado se genera al guardar.</p>
   </div>
 
   @if (creado(); as t) {
@@ -14,6 +14,7 @@
         </span>
         <h3 class="mt-4 text-lg font-semibold text-slate-900">Trabajador registrado</h3>
         <p class="mt-1 text-sm text-slate-500">{{ nombreCompleto(t) }}</p>
+        <p class="mt-1 text-xs text-slate-500">N° de tarjeta (QR): <span class="font-mono font-semibold text-slate-700">{{ t.numeroTarjeta }}</span></p>
         <p class="mt-5 text-xs font-semibold uppercase tracking-wide text-slate-500">Número de empleado asignado</p>
         <p class="mt-1 rounded-xl bg-slate-900 px-6 py-3 font-mono text-2xl font-bold tracking-wider text-white">{{ t.numeroEmpleado }}</p>
 
@@ -26,8 +27,10 @@
         <div class="mt-6 flex flex-col gap-3 sm:flex-row">
           <button type="button" (click)="nuevoRegistro()"
             class="rounded-xl bg-blue-700 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-800">Registrar otro</button>
+          <a routerLink="../credencial" [queryParams]="{ trabajador: t.id }"
+            class="rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700">Ver e imprimir credencial</a>
           <a routerLink="../kardex" [queryParams]="{ trabajador: t.id }"
-            class="rounded-xl px-5 py-2.5 text-sm font-semibold text-slate-700 ring-1 ring-slate-300 hover:bg-slate-50">Ver su kardex</a>
+            class="rounded-xl px-5 py-2.5 text-sm font-semibold text-slate-700 ring-1 ring-slate-300 hover:bg-slate-50">Historial de equipo</a>
         </div>
       </div>
     </div>
@@ -62,18 +65,6 @@
           </label>
 
           <label class="block">
-            <span class="mb-1.5 block text-sm font-medium text-slate-700">CURP <span class="text-red-600">*</span></span>
-            <input formControlName="curp" maxlength="18" (input)="aMayusculas('curp')" class="w-full rounded-xl border bg-white px-3.5 py-2.5 font-mono text-sm uppercase outline-none transition focus:ring-4"
-              [class]="invalido('curp') ? 'border-red-400 focus:ring-red-600/10' : 'border-slate-300 focus:border-blue-700 focus:ring-blue-700/10'" />
-            @if (invalido('curp')) { <span class="mt-1 block text-xs text-red-600">CURP inválida (18 caracteres).</span> }
-          </label>
-          <label class="block">
-            <span class="mb-1.5 block text-sm font-medium text-slate-700">RFC <span class="text-red-600">*</span></span>
-            <input formControlName="rfc" maxlength="13" (input)="aMayusculas('rfc')" class="w-full rounded-xl border bg-white px-3.5 py-2.5 font-mono text-sm uppercase outline-none transition focus:ring-4"
-              [class]="invalido('rfc') ? 'border-red-400 focus:ring-red-600/10' : 'border-slate-300 focus:border-blue-700 focus:ring-blue-700/10'" />
-            @if (invalido('rfc')) { <span class="mt-1 block text-xs text-red-600">RFC inválido (13 caracteres con homoclave).</span> }
-          </label>
-          <label class="block">
             <span class="mb-1.5 block text-sm font-medium text-slate-700">NSS <span class="text-red-600">*</span></span>
             <input formControlName="nss" maxlength="11" inputmode="numeric" class="w-full rounded-xl border bg-white px-3.5 py-2.5 font-mono text-sm outline-none transition focus:ring-4"
               [class]="invalido('nss') ? 'border-red-400 focus:ring-red-600/10' : 'border-slate-300 focus:border-blue-700 focus:ring-blue-700/10'" />
@@ -96,8 +87,11 @@
         <div class="mt-4 grid grid-cols-1 gap-4 md:grid-cols-3">
           <label class="block">
             <span class="mb-1.5 block text-sm font-medium text-slate-700">Puesto <span class="text-red-600">*</span></span>
-            <input formControlName="puesto" class="w-full rounded-xl border bg-white px-3.5 py-2.5 text-sm outline-none transition focus:ring-4"
-              [class]="invalido('puesto') ? 'border-red-400 focus:ring-red-600/10' : 'border-slate-300 focus:border-blue-700 focus:ring-blue-700/10'" />
+            <select formControlName="puesto" class="w-full rounded-xl border bg-white px-3.5 py-2.5 text-sm outline-none transition focus:ring-4"
+              [class]="invalido('puesto') ? 'border-red-400 focus:ring-red-600/10' : 'border-slate-300 focus:border-blue-700 focus:ring-blue-700/10'">
+              <option value="" disabled>Selecciona</option>
+              @for (p of puestos; track p) { <option [value]="p">{{ p }}</option> }
+            </select>
             @if (invalido('puesto')) { <span class="mt-1 block text-xs text-red-600">Obligatorio.</span> }
           </label>
           <label class="block">
@@ -147,31 +141,14 @@
         </div>
       </fieldset>
 
-      <!-- 3. Documentación e inducción -->
+      <!-- 3. Credencial y cursos (opcional) -->
       <fieldset class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm md:p-6">
-        <legend class="sr-only">Documentación</legend>
-        <div class="flex items-center justify-between">
-          <h3 class="text-sm font-semibold uppercase tracking-wide text-slate-500">Documentación entregada</h3>
-          <span class="text-xs font-medium text-slate-500">{{ documentosEntregados() }} de {{ documentos.length }}</span>
+        <legend class="sr-only">Credencial y cursos</legend>
+        <div class="mb-4 flex flex-wrap items-center gap-2">
+          <h3 class="text-sm font-semibold uppercase tracking-wide text-slate-500">Credencial y cursos</h3>
+          <span class="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">Opcional</span>
         </div>
-
-        <!-- formGroupName conecta este bloque con el subgrupo "documentos" -->
-        <div formGroupName="documentos" class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          @for (d of documentos; track d.clave) {
-            <label class="flex cursor-pointer items-center gap-3 rounded-xl border border-slate-200 px-4 py-3 transition hover:bg-slate-50 has-[:checked]:border-blue-700 has-[:checked]:bg-blue-50">
-              <input type="checkbox" [formControlName]="d.clave" class="size-4 accent-blue-700" />
-              <span class="text-sm text-slate-700">{{ d.texto }}</span>
-            </label>
-          }
-        </div>
-
-        <label class="mt-4 flex cursor-pointer items-start gap-3 rounded-xl bg-orange-50/60 px-4 py-3 ring-1 ring-orange-200 has-[:checked]:bg-emerald-50 has-[:checked]:ring-emerald-300">
-          <input type="checkbox" formControlName="induccionSeguridad" class="mt-0.5 size-4 accent-emerald-600" />
-          <span class="text-sm text-slate-700">
-            <span class="font-medium">Recibió la inducción de seguridad.</span>
-            Sin inducción no se le puede entregar EPP ni iniciar actividades.
-          </span>
-        </label>
+        <app-editor-credencial [(datos)]="credencial" [tarjetaOpcional]="true" />
       </fieldset>
 
       <div class="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
