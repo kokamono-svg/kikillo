@@ -22,12 +22,15 @@
         <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
       </svg>
       <input
+        appLector
+        (lector)="busqueda.set($event)"
         type="search"
         placeholder="Folio, trabajador, No. de empleado o artículo"
         [value]="busqueda()"
         (input)="busqueda.set(valor($event))"
-        class="h-11 w-full rounded-xl border border-gray-200 bg-white pr-4 pl-11 text-base text-gray-800 outline-none transition placeholder:text-gray-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/15 sm:text-sm dark:border-white/10 dark:bg-neutral-900 dark:text-white"
+        class="h-11 w-full rounded-xl border border-gray-200 bg-white pr-11 pl-11 text-base text-gray-800 outline-none transition placeholder:text-gray-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/15 sm:text-sm dark:border-white/10 dark:bg-neutral-900 dark:text-white"
       />
+      <app-boton-escaner titulo="Escanea una etiqueta o credencial" [clase]="'absolute top-1/2 right-1.5 -translate-y-1/2 inline-flex size-8 items-center justify-center rounded-lg text-gray-400 transition hover:bg-gray-100 hover:text-blue-600 dark:hover:bg-white/10'" (leido)="busqueda.set($event)" />
     </div>
 
     <div class="flex gap-2 overflow-x-auto pb-1 lg:pb-0">
@@ -113,13 +116,6 @@
     </ul>
   </section>
 
-  @if (esAdmin) {
-    <p class="text-right">
-      <button type="button" (click)="almacen.reiniciar()" class="text-xs text-gray-400 underline hover:text-orange-500">
-        Reiniciar datos de demo
-      </button>
-    </p>
-  }
 </div>
 
 <!-- =========================================

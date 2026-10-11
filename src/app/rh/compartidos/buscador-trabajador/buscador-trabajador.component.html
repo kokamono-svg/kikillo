@@ -6,16 +6,16 @@
   <div class="relative mt-3">
     <svg class="pointer-events-none absolute left-3.5 top-1/2 size-5 -translate-y-1/2 text-slate-400" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" /></svg>
 
-    <input #campo type="text" [id]="idLista + '-input'" autocomplete="off"
+    <input #campo appLector (lector)="leerCodigo($event)" type="text" [id]="idLista + '-input'" autocomplete="off"
       role="combobox" [attr.aria-expanded]="abierto()" [attr.aria-controls]="idLista"
       [attr.aria-activedescendant]="abierto() && resaltado() >= 0 ? idLista + '-' + resaltado() : null"
       [value]="termino()" (input)="escribir(campo.value)" (keydown)="teclado($event)"
       (focus)="abierto.set(true)"
       placeholder="Escribe número de empleado, nombre o CURP"
-      class="w-full rounded-xl border border-slate-300 bg-white py-3 pl-11 pr-11 text-sm outline-none transition placeholder:text-slate-400 focus:border-blue-700 focus:ring-4 focus:ring-blue-700/10" />
+      class="w-full rounded-xl border border-slate-300 bg-white py-3 pl-11 pr-20 text-sm outline-none transition placeholder:text-slate-400 focus:border-blue-700 focus:ring-4 focus:ring-blue-700/10" />
 
     <!-- Derecha del input: spinner mientras busca, o X para limpiar -->
-    <div class="absolute right-3 top-1/2 -translate-y-1/2">
+    <div class="absolute right-2 top-1/2 flex -translate-y-1/2 items-center gap-1">
       @if (buscando()) {
         <svg class="size-5 animate-spin text-blue-700" viewBox="0 0 24 24" fill="none"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" /><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 0 1 8-8v4a4 4 0 0 0-4 4H4Z" /></svg>
       } @else if (termino()) {
@@ -24,6 +24,7 @@
           <svg class="size-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
         </button>
       }
+      <app-boton-escaner titulo="Escanea la credencial del trabajador" [clase]="'inline-flex size-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-blue-700'" (leido)="leerCodigo($event)" />
     </div>
 
     <!-- ===== Lista desplegable ===== -->

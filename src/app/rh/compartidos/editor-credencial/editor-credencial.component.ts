@@ -13,10 +13,12 @@ import { CURSOS, CursoTrabajador, cursoVigente } from '../../../compartido/curso
 import { DatosCredencial } from '../../rh.model';
 import { hoyIso } from '../../rh.utils';
 import { limpiarCodigo } from '../../../compartido/codigos';
+import { BotonEscanerComponent } from '../../../compartido/escaner/boton-escaner.component';
+import { LectorDirective } from '../../../compartido/escaner/lector.directive';
 
 @Component({
   selector: 'app-editor-credencial',
-  imports: [CamaraComponent],
+  imports: [CamaraComponent, BotonEscanerComponent, LectorDirective],
   templateUrl: './editor-credencial.component.html',
   host: { class: 'block' },
 })
@@ -45,6 +47,12 @@ export class EditorCredencialComponent {
    */
   tarjeta(valor: string): void {
     this.cambiar('numeroTarjeta', valor);
+  }
+
+  /** N° leído de la credencial con la cámara o con la pistola fuera del campo. */
+  leerTarjeta(texto: string): void {
+    this.tarjeta(texto);
+    this.limpiarTarjeta();
   }
 
   limpiarTarjeta(): void {

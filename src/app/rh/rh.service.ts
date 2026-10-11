@@ -3,8 +3,9 @@
 // Único lugar que habla con el backend (Flask). Las pantallas nunca
 // llaman a la API directamente; siempre pasan por aquí.
 //
-// Mientras usarDatosDePrueba = true, todo funciona con una "base de
-// datos" falsa en memoria (al final del archivo) que imita a Flask.
+// Los datos viven en MySQL (backend Flask: /api/rh). Con
+// usarDatosDePrueba = true se usa una "base de datos" falsa en memoria
+// (al final del archivo), útil solo para trabajar sin backend.
 // =====================================================================
 import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpErrorResponse, HttpParams } from '@angular/common/http';
@@ -13,16 +14,18 @@ import { delay, switchMap } from 'rxjs/operators';
 import { Adeudo, DocumentosTrabajador, Movimiento, NuevoTrabajador, ResumenRh, RespuestaBaja, SolicitudBaja, TipoArticulo, TipoMovimiento, Trabajador, Vale, COMPANIA, DatosCredencial } from './rh.model';
 import { TEXTO_DOCUMENTO, diasDesde, hoyIso, nombreCompleto, normalizar } from './rh.utils';
 import { limpiarCodigo, llaveCodigo, mismoCodigo } from '../compartido/codigos';
+import { CURSO_INDUCCION, tieneInduccion } from '../compartido/cursos';
+import { AuthService } from '../auth/auth.service';
 
 @Injectable({ providedIn: 'root' })
 export class RhService {
   private http = inject(HttpClient);
 
   /** URL de la API de Flask. Cámbiala por la del VPS al publicar. */
-  private apiUrl = 'http://localhost:5000/api/rh';
+  private apiUrl = `${inject(AuthService).apiUrl}/rh`;
 
   /** true = datos falsos en memoria; false = llama a Flask de verdad. */
-  private usarDatosDePrueba = true;
+  private usarDatosDePrueba = false;
 
   // ------------------------------------------------------------------
   // TABLERO
@@ -85,7 +88,8 @@ export class RhService {
         curp: '',
         rfc: '',
         documentos: { identificacion: false, comprobanteDomicilio: false, datosBancarios: false, contratoFirmado: false, altaImss: false },
-        induccionSeguridad: false,
+        // La inducción se registra como curso (con vigencia) en la credencial
+        induccionSeguridad: tieneInduccion(nuevo.cursos),
         numeroTarjeta: tarjeta,
         compania: nuevo.compania || COMPANIA,
         fechaEmision: nuevo.fechaEmision || hoyIso(),
@@ -111,7 +115,7 @@ export class RhService {
       if (BD.trabajadores.some((x) => x.id !== id && mismoCodigo(x.numeroTarjeta, tarjeta))) {
         return simularError(409, 'Ese número de tarjeta ya pertenece a otro trabajador.');
       }
-      Object.assign(t, { ...datos, numeroTarjeta: tarjeta });
+      Object.assign(t, { ...datos, numeroTarjeta: tarjeta, induccionSeguridad: tieneInduccion(datos.cursos) });
       return simular({ ...t }, 500);
     }
     return this.http.put<Trabajador>(`${this.apiUrl}/trabajadores/${id}/credencial`, datos);
@@ -467,7 +471,14 @@ const BD = {
       fechaIngreso: '2026-05-18', tallaRopa: 'M', tallaCalzado: '24', documentos: DOCS_COMPLETOS,
       induccionSeguridad: true, activo: true, fechaBaja: null, motivoBaja: null,
     },
-  ].map((t) => ({ ...t, ...CREDENCIALES[t.id] })) as Trabajador[],
+  ]
+    .map((t) => ({ ...t, ...CREDENCIALES[t.id] }))
+    .map((t) => ({
+      ...t,
+      cursos: t.induccionSeguridad
+        ? [{ clave: CURSO_INDUCCION, folio: `IND-${String(t.id).padStart(3, '0')}`, vigencia: '2027-06-30' }, ...t.cursos]
+        : t.cursos,
+    })) as Trabajador[],
 
   movimientos: [
     // Juan: vale 0001 (como el ejemplo impreso). Debe arnés, bandola, minipulidor y detector.

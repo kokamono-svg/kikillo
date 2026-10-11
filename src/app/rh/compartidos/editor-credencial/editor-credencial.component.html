@@ -32,7 +32,10 @@
           N° de tarjeta (va en el QR)
           @if (!tarjetaOpcional()) { <span class="text-red-600">*</span> }
         </span>
+        <div class="flex gap-2">
         <input
+          appLector
+          (lector)="leerTarjeta($event)"
           [value]="datos().numeroTarjeta"
           (input)="tarjeta(valor($event))"
           (keydown.enter)="$event.preventDefault(); limpiarTarjeta()"
@@ -40,8 +43,10 @@
           autocomplete="off"
           spellcheck="false"
           [placeholder]="tarjetaOpcional() ? 'Escanea su credencial actual o déjalo vacío para generar uno' : 'Escanea o escribe el número'"
-          class="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 font-mono text-sm outline-none transition placeholder:font-sans placeholder:text-slate-400 focus:border-blue-700 focus:ring-4 focus:ring-blue-700/10"
+          class="min-w-0 flex-1 rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 font-mono text-sm outline-none transition placeholder:font-sans placeholder:text-slate-400 focus:border-blue-700 focus:ring-4 focus:ring-blue-700/10"
         />
+        <app-boton-escaner titulo="Escanea la credencial" [clase]="'inline-flex shrink-0 items-center justify-center rounded-xl border border-slate-300 bg-white px-3 text-slate-600 transition hover:border-blue-700 hover:bg-blue-50 hover:text-blue-700'" (leido)="leerTarjeta($event)" />
+        </div>
         <span class="mt-1 block text-xs text-slate-500">Si ya tiene credencial del cliente, escanéala: así el almacén la reconoce al prestar.</span>
       </label>
       <label class="block">

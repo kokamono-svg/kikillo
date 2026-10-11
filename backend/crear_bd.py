@@ -1,7 +1,7 @@
 # =====================================================================
 # crear_bd.py
 # Crea la BD Inventarios con inventarios.sql y (opcional) le carga los
-# datos de ejemplo de inventarios_datos.sql. Usa los datos de .env.
+# datos de prueba de datos_prueba.py. Usa los datos de .env.
 #
 #   python crear_bd.py                 -> crea lo que falte (no borra nada)
 #   python crear_bd.py --datos         -> además carga los datos de ejemplo
@@ -14,6 +14,8 @@ from pathlib import Path
 
 import mysql.connector
 from dotenv import load_dotenv
+
+import datos_prueba
 
 AQUI = Path(__file__).parent
 
@@ -49,7 +51,9 @@ def main():
 
     ejecutar(cur, "inventarios.sql")
     if "--datos" in sys.argv or "--reiniciar" in sys.argv:
-        ejecutar(cur, "inventarios_datos.sql")
+        cur.execute(f"USE `{nombre}`")
+        datos_prueba.cargar(cur)
+        print("  ok  datos de prueba")
     con.commit()
     con.close()
 

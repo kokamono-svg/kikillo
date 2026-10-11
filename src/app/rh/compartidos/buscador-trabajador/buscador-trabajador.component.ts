@@ -12,6 +12,9 @@ import { catchError, debounceTime, switchMap } from 'rxjs/operators';
 import { RhService } from '../../rh.service';
 import { Trabajador } from '../../rh.model';
 import { iniciales, nombreCompleto } from '../../rh.utils';
+import { mismoCodigo } from '../../../compartido/codigos';
+import { BotonEscanerComponent } from '../../../compartido/escaner/boton-escaner.component';
+import { LectorDirective } from '../../../compartido/escaner/lector.directive';
 
 /** Contador para que cada buscador tenga ids únicos (accesibilidad). */
 let siguienteId = 0;
@@ -19,6 +22,7 @@ let siguienteId = 0;
 @Component({
   selector: 'app-buscador-trabajador',
   standalone: true,
+  imports: [BotonEscanerComponent, LectorDirective],
   templateUrl: './buscador-trabajador.component.html',
   host: {
     class: 'block', // el elemento <app-...> se comporta como bloque (respeta márgenes)
@@ -43,6 +47,9 @@ export class BuscadorTrabajadorComponent {
   resaltado = signal(-1);        // índice marcado con las flechas (-1 = ninguno)
 
   idLista = `buscador-lista-${siguienteId++}`;
+
+  /** Código escaneado (credencial): al llegar los resultados se elige solo si es de una persona. */
+  private codigoEscaneado = '';
 
   /** Cada tecla manda el texto aquí; debounceTime espera a que dejen de escribir. */
   private busquedas = new Subject<string>();
@@ -72,6 +79,10 @@ export class BuscadorTrabajadorComponent {
         this.buscando.set(false);
         this.resultados.set(lista);
         this.resaltado.set(lista.length ? 0 : -1);
+        const codigo = this.codigoEscaneado;
+        this.codigoEscaneado = '';
+        const exacto = codigo ? this.coincidenciaExacta(lista, codigo) : null;
+        if (exacto) this.elegir(exacto);
       });
   }
 
@@ -103,14 +114,33 @@ export class BuscadorTrabajadorComponent {
         e.preventDefault();
         if (lista.length) this.mover((this.resaltado() - 1 + lista.length) % lista.length);
         break;
-      case 'Enter':
+      case 'Enter': {
         e.preventDefault();
-        if (this.abierto() && lista[this.resaltado()]) this.elegir(lista[this.resaltado()]);
+        // La pistola escribe y manda Enter antes de que lleguen los resultados: se elige al llegar
+        if (this.buscando()) {
+          this.codigoEscaneado = this.termino().trim();
+          break;
+        }
+        const elegido = this.coincidenciaExacta(lista, this.termino()) ?? lista[this.resaltado()];
+        if (this.abierto() && elegido) this.elegir(elegido);
         break;
+      }
       case 'Escape':
         this.abierto.set(false);
         break;
     }
+  }
+
+  /** Credencial leída con la cámara o con la pistola fuera del campo. */
+  leerCodigo(texto: string): void {
+    this.codigoEscaneado = texto.trim();
+    this.escribir(texto.trim());
+  }
+
+  /** La persona cuyo N° de tarjeta o de empleado es exactamente el código. */
+  private coincidenciaExacta(lista: Trabajador[], codigo: string): Trabajador | null {
+    const encontrados = lista.filter((t) => [t.numeroTarjeta, t.numeroEmpleado].some((c) => !!c && mismoCodigo(c, codigo)));
+    return encontrados.length === 1 ? encontrados[0] : null;
   }
 
   /** Marca una opción y la hace visible si la lista tiene scroll. */

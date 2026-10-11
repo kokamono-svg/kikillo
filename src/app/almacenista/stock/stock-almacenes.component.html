@@ -1,0 +1,94 @@
+<!-- =====================================================
+     STOCK POR ALMACÉN (consulta para Compras)
+====================================================== -->
+<div class="space-y-6">
+  <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+    <div>
+      <h1 class="text-2xl font-bold tracking-tight text-gray-900 sm:text-3xl dark:text-white">Stock por almacén</h1>
+      <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Lo disponible para prestar en los {{ almacenes.length }} almacenes. En naranja, lo que hay que reponer.</p>
+    </div>
+    <a routerLink="/almacen/reportes" class="inline-flex h-10 items-center justify-center rounded-xl border border-gray-300 bg-white px-4 text-sm font-semibold text-gray-700 hover:bg-gray-50 dark:border-white/15 dark:bg-neutral-900 dark:text-gray-200">Reporte para Excel</a>
+  </div>
+
+  <!-- Un resumen por almacén -->
+  <section aria-label="Almacenes" class="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+    @for (r of resumenes(); track r.almacen) {
+      <a routerLink="/almacen/inventario" (click)="verAlmacen(r.almacen)" class="group rounded-2xl border border-gray-200 bg-white p-4 transition hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-lg hover:shadow-blue-600/5 dark:border-white/10 dark:bg-neutral-900">
+        <p class="truncate text-sm font-semibold text-gray-900 dark:text-white" [title]="r.almacen">{{ corto(r.almacen) }}</p>
+        <p class="mt-2 text-2xl font-bold text-emerald-600 dark:text-emerald-400">{{ r.disponibles }}</p>
+        <p class="text-xs text-gray-500 dark:text-gray-400">disponibles de {{ r.unidades }}</p>
+        <p class="mt-2 text-xs font-medium" [class]="r.stockBajo.length ? 'text-orange-600 dark:text-orange-400' : 'text-gray-400'">
+          {{ r.stockBajo.length ? r.stockBajo.length + ' por reponer' : 'Sin faltantes' }}
+        </p>
+      </a>
+    }
+  </section>
+
+  <!-- Filtros -->
+  <div class="flex flex-col gap-3 lg:flex-row lg:items-center">
+    <input type="search" placeholder="Buscar artículo o código" [value]="busqueda()" (input)="busqueda.set(valor($event))"
+      class="h-11 w-full rounded-xl border border-gray-200 bg-white px-4 text-base outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/15 sm:text-sm lg:max-w-sm dark:border-white/10 dark:bg-neutral-900 dark:text-white" />
+    <div class="sin-barra flex gap-2 overflow-x-auto">
+      @for (t of tipos; track t) {
+        <button type="button" (click)="tipo.set(t)" class="h-10 shrink-0 rounded-full px-4 text-sm font-medium transition"
+          [class]="tipo() === t ? 'bg-black text-white dark:bg-white dark:text-black' : 'bg-white text-gray-600 ring-1 ring-gray-200 hover:bg-gray-50 dark:bg-white/5 dark:text-gray-300 dark:ring-white/10'">
+          {{ t || 'Todos' }}
+        </button>
+      }
+      <button type="button" (click)="soloBajo.set(!soloBajo())" [attr.aria-pressed]="soloBajo()" class="h-10 shrink-0 rounded-full px-4 text-sm font-medium transition"
+        [class]="soloBajo() ? 'bg-orange-500 text-white' : 'bg-white text-orange-600 ring-1 ring-orange-200 hover:bg-orange-50 dark:bg-white/5 dark:ring-orange-500/30'">
+        Por reponer <span class="ml-1 font-semibold">{{ porReponer() }}</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Tabla: artículo × almacén -->
+  <section class="overflow-hidden rounded-2xl border border-gray-200 bg-white dark:border-white/10 dark:bg-neutral-900">
+    <div class="overflow-x-auto">
+      <table class="w-full min-w-[880px] text-left text-sm">
+        <thead class="bg-gray-50 text-xs tracking-wide text-gray-500 uppercase dark:bg-white/5 dark:text-gray-400">
+          <tr>
+            <th scope="col" class="sticky left-0 z-10 bg-gray-50 px-4 py-3 dark:bg-neutral-900">Artículo</th>
+            @for (a of almacenes; track a) {
+              <th scope="col" class="px-3 py-3 text-center" [title]="a">{{ corto(a) }}</th>
+            }
+            <th scope="col" class="px-4 py-3 text-right">Total disp.</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100 dark:divide-white/10">
+          @for (f of visibles(); track f.codigo) {
+            <tr class="hover:bg-gray-50/70 dark:hover:bg-white/5">
+              <th scope="row" class="sticky left-0 z-10 bg-white px-4 py-2.5 text-left font-normal dark:bg-neutral-900">
+                <p class="font-medium text-gray-900 dark:text-white">{{ f.nombre }}</p>
+                <p class="mt-0.5 flex items-center gap-1.5 text-xs text-gray-500">
+                  <span class="font-mono">{{ f.codigo }}</span>
+                  <span class="rounded-full px-1.5 py-px text-[10px] font-medium" [class]="claseTipo[f.tipo]">{{ f.tipo }}</span>
+                </p>
+              </th>
+              @for (c of f.celdas; track $index) {
+                <td class="px-3 py-2.5 text-center">
+                  @if (c) {
+                    <span class="inline-flex min-w-12 flex-col items-center rounded-lg px-2 py-1"
+                      [class]="c.bajo ? 'bg-orange-50 text-orange-700 dark:bg-orange-500/10 dark:text-orange-300' : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300'"
+                      [title]="c.disponibles + ' disponibles de ' + c.total">
+                      <span class="text-base leading-tight font-bold">{{ c.disponibles }}</span>
+                      <span class="text-[10px] opacity-75">de {{ c.total }}</span>
+                    </span>
+                  } @else {
+                    <span class="text-gray-300 dark:text-gray-600" aria-label="No lo maneja">—</span>
+                  }
+                </td>
+              }
+              <td class="px-4 py-2.5 text-right">
+                <p class="font-bold text-gray-900 dark:text-white">{{ f.disponibles }}</p>
+                <p class="text-xs text-gray-500">de {{ f.total }}</p>
+              </td>
+            </tr>
+          } @empty {
+            <tr><td [attr.colspan]="almacenes.length + 2" class="px-4 py-10 text-center text-gray-400">No hay artículos con esos filtros.</td></tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>

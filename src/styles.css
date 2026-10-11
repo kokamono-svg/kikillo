@@ -9,6 +9,33 @@
 /* Tipografía: Inter (se carga en index.html) con letras de sistema de respaldo */
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+
+  /* Colores de la empresa: AZUL (el del logo), VERDE, BLANCO y NEGRO.
+     Toda la app usa "blue-*" y "emerald-*": aquí se ajustan a la marca.
+     Rojo y naranja quedan solo para alertas (vencido, stock bajo, errores). */
+  --color-blue-50: #eef5fc;
+  --color-blue-100: #d9e8f8;
+  --color-blue-200: #b3d1f1;
+  --color-blue-300: #80b2e6;
+  --color-blue-400: #4a8fd6;
+  --color-blue-500: #1f70c2;
+  --color-blue-600: #0052a5; /* azul IMHOTEP (logo) */
+  --color-blue-700: #004489;
+  --color-blue-800: #0b3870;
+  --color-blue-900: #13246b; /* azul marino (franja del logo) */
+  --color-blue-950: #0c1640;
+
+  --color-emerald-50: #ecfdf3;
+  --color-emerald-100: #d1fae1;
+  --color-emerald-200: #a6f4c6;
+  --color-emerald-300: #6ee7a4;
+  --color-emerald-400: #34d17e;
+  --color-emerald-500: #10b75f;
+  --color-emerald-600: #04964c; /* verde IMHOTEP */
+  --color-emerald-700: #057a40;
+  --color-emerald-800: #0a6036;
+  --color-emerald-900: #0b4f2e;
+  --color-emerald-950: #022c18;
 }
 
 @layer base {
@@ -30,6 +57,22 @@
   :where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
     @apply outline-2 outline-offset-2 outline-blue-500;
   }
+}
+
+/* Logo en círculo blanco: la imagen trae mucho margen, se acerca para que se vea grande.
+   Uso: <span class="logo-marca size-14"><img src="images/logo.jpg" alt="IMHOTEP" /></span> */
+.logo-marca {
+  display: inline-flex;
+  flex-shrink: 0;
+  overflow: hidden;
+  border-radius: 9999px;
+  background: #fff;
+}
+.logo-marca > img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scale(1.24);
 }
 
 /* Barra de desplazamiento horizontal discreta (pestañas, tablas) */

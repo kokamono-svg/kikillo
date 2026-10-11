@@ -47,7 +47,7 @@ const INICIO: Record<Rol, string> = {
   admin: '/dashboard',
   rh: '/rh',
   almacenista: '/almacen',
-  comprador: '/almacen',
+  comprador: '/almacen/stock', // Compras entra directo al stock de cada almacén
   solicitante: '/solicitante',
 };
 

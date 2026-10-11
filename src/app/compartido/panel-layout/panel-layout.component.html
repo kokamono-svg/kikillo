@@ -132,10 +132,12 @@
     <aside class="flex min-h-full w-72 flex-col bg-black text-gray-300">
       <!-- Marca -->
       <div class="flex items-center gap-3 px-5 pt-6 pb-5">
-        <img src="images/logo.jpg" alt="" class="size-11 shrink-0 rounded-xl bg-white object-contain p-0.5 ring-1 ring-white/20" />
+        <span class="logo-marca size-14 ring-2 ring-blue-600/60">
+          <img src="images/logo.jpg" alt="" />
+        </span>
         <div class="min-w-0 leading-tight">
-          <p class="text-base font-bold tracking-wide text-white">IMHOTEP</p>
-          <p class="truncate text-xs text-gray-400">Control de almacenes</p>
+          <p class="text-lg font-extrabold tracking-[0.12em] text-white">IMHOTEP</p>
+          <p class="truncate text-xs text-blue-300">Control de almacenes</p>
         </div>
         <!-- Cerrar (solo celular) -->
         <label
@@ -188,6 +190,23 @@
           <ul class="space-y-1">
             @for (m of otrosModulos(); track m.ruta) {
               <li>
+                @if (m.bloqueado) {
+                  <!-- Se ve, pero no se puede entrar -->
+                  <span
+                    aria-disabled="true"
+                    title="Solo el personal de Recursos Humanos puede entrar"
+                    class="flex cursor-not-allowed items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-medium text-gray-500"
+                  >
+                    <svg class="size-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                      <path stroke-linecap="round" stroke-linejoin="round" [attr.d]="m.icono" />
+                    </svg>
+                    <span class="truncate">{{ m.texto }}</span>
+                    <svg class="ml-auto size-4 shrink-0 text-gray-500" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" aria-hidden="true">
+                      <path stroke-linecap="round" stroke-linejoin="round" [attr.d]="iconos.candado" />
+                    </svg>
+                    <span class="sr-only">(solo personal de RH)</span>
+                  </span>
+                } @else {
                 <a
                   [routerLink]="m.ruta"
                   (click)="menuAbierto.set(false)"
@@ -201,6 +220,7 @@
                     <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
                   </svg>
                 </a>
+                }
               </li>
             }
           </ul>

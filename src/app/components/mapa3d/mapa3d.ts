@@ -77,9 +77,12 @@ const NIVELES = 4; // artículos por anaquel
 const CAJAS_POR_NIVEL = 8; // unidades que se dibujan por artículo (si hay más, se dibujan en proporción)
 const SEP_ANAQUEL = 3.6; // distancia entre anaqueles
 const SEP_PASILLO = 6; // distancia entre pasillos
+import { BotonEscanerComponent } from '../../compartido/escaner/boton-escaner.component';
+import { LectorDirective } from '../../compartido/escaner/lector.directive';
 
 @Component({
   selector: 'app-mapa3d',
+  imports: [BotonEscanerComponent, LectorDirective],
   standalone: true,
   templateUrl: './mapa3d.html',
   styleUrl: './mapa3d.css',
@@ -535,7 +538,7 @@ export class Mapa3d implements OnDestroy {
     const clases = {
       edificio: 'rounded-xl bg-white/95 px-3 py-1.5 text-center shadow-lg ring-1 ring-black/5',
       anaquel: 'rounded-lg bg-gray-900/85 px-2 py-0.5 text-center text-white shadow',
-      pasillo: 'rounded-md bg-amber-400 px-2 py-0.5 text-[11px] font-bold tracking-wide text-amber-950 uppercase shadow',
+      pasillo: 'rounded-md bg-orange-400 px-2 py-0.5 text-[11px] font-bold tracking-wide text-orange-950 uppercase shadow',
       zona: 'rounded-full bg-emerald-700/90 px-3 py-1 text-xs font-semibold tracking-wide text-white uppercase shadow',
     };
     el.className = `${clases[tipo]} select-none whitespace-nowrap font-sans ${apagada ? 'opacity-60' : ''}`;

@@ -1,7 +1,10 @@
-import { Injectable, computed, signal } from '@angular/core';
-import { nombreCurso } from '../compartido/cursos';
-import { limpiarCodigo, llaveCodigo, mismoCodigo } from '../compartido/codigos';
-import { Articulo, EntradaArticulo, Etiqueta, EstadoPrestamo, LineaVale, Pieza, Recepcion, ResumenAlmacen, Vale } from './almacen.models';
+import { HttpClient, HttpErrorResponse } from '@angular/common/http';
+import { Injectable, effect, inject, signal, untracked } from '@angular/core';
+import { firstValueFrom } from 'rxjs';
+import { AuthService } from '../auth/auth.service';
+import { CURSO_INDUCCION, nombreCurso } from '../compartido/cursos';
+import { limpiarCodigo, mismoCodigo } from '../compartido/codigos';
+import { Articulo, EntradaArticulo, Etiqueta, EstadoPrestamo, LineaVale, Pieza, Recepcion, ResumenAlmacen, Traspaso, Vale } from './almacen.models';
 
 /* =====================================================
    SERVICIO DEL ALMACÉN
@@ -10,24 +13,45 @@ import { Articulo, EntradaArticulo, Etiqueta, EstadoPrestamo, LineaVale, Pieza, 
    providedIn: 'root' = Angular crea UNA sola instancia
    para toda la app (todos ven los mismos datos).
 
-   Cada almacén tiene su propio inventario (su stock y
-   sus piezas). Cada vale guarda de qué almacén salió
-   el equipo.
-
-   Por ahora los datos son de ejemplo y se guardan en
-   localStorage (memoria del navegador). Cuando tengan
-   backend, solo se cambia este archivo: los componentes
-   no se enteran.
+   Los datos viven en MySQL (backend Flask: /api/almacen).
+   Aquí se guarda una copia en signals para que las
+   pantallas se calculen al instante; después de cada
+   cambio (préstamo, devolución, alta...) se vuelve a
+   pedir el estado al servidor, que es quien manda.
+   El servidor revisa otra vez todas las reglas.
 ===================================================== */
 
-// v4: toda la herramienta y el EPP ahora van por número de serie; lo guardado con v3 ya no sirve
-const CLAVE_INVENTARIOS = 'imhotep.inventarios.v4';
-const CLAVE_VALES = 'imhotep.vales.v4';
+/** Con estos días (o menos) para vencer, la certificación de una pieza se marca "por vencer". */
+export const DIAS_AVISO_CERTIFICACION = 30;
+
+export type EstadoCertificacion = 'vigente' | 'por-vencer' | 'vencida' | 'no-aplica';
+
+/** ¿Cómo está la certificación de una pieza? (vence al terminar el día indicado) */
+export function estadoCertificacion(p: Pieza): EstadoCertificacion {
+  if (!p.certificacionVence) return 'no-aplica';
+  const dias = diasParaVencer(p);
+  if (dias < 0) return 'vencida';
+  return dias <= DIAS_AVISO_CERTIFICACION ? 'por-vencer' : 'vigente';
+}
+
+/** Días que faltan para que venza (negativo = ya venció). */
+export function diasParaVencer(p: Pieza): number {
+  if (!p.certificacionVence) return Infinity;
+  const [a, m, d] = p.certificacionVence.split('-').map(Number);
+  const hoy = new Date();
+  const vence = new Date(a, m - 1, d);
+  return Math.round((vence.getTime() - new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate()).getTime()) / 86_400_000);
+}
+
+/** ¿Se puede entregar esta pieza? Apta, sin prestar y con su certificación vigente (si aplica). */
+export function piezaEntregable(p: Pieza): boolean {
+  return p.estado === 'apto' && !p.prestada && estadoCertificacion(p) !== 'vencida';
+}
 
 /** Con esta cantidad disponible (o menos) un artículo se marca como "stock bajo". */
 export const STOCK_BAJO = 3;
 
-/** Almacenes de la empresa. */
+/** Almacenes de la empresa (los mismos de la tabla almacen). */
 export const ALMACENES = [
   'Colonia de Contratistas (Mittal)',
   'Central Kepler',
@@ -37,92 +61,8 @@ export const ALMACENES = [
   'Área Minas',
 ];
 
-/**
- * Piezas de ejemplo con serie consecutiva: piezas('FLX', 3) → FLX-001, FLX-002, FLX-003.
- * "noAptas" = números de pieza que están marcados como no aptos.
- */
-function piezas(prefijo: string, cuantas: number, noAptas: number[] = []): Pieza[] {
-  return Array.from({ length: cuantas }, (_, i) => ({
-    serie: `${prefijo}-${String(i + 1).padStart(3, '0')}`,
-    estado: noAptas.includes(i + 1) ? 'no apto' : 'apto',
-    ultimaInspeccion: '2026-10-01',
-    prestada: false,
-  }));
-}
-
-/** Catálogo inicial: los 15 artículos de la hoja "Equipo y herramienta para 1 trabajador dentro de Mittal". */
-const CATALOGO_INICIAL: Articulo[] = [
-  {
-    codigo: 'ALT-KEV', nombre: 'Arnés Kevlar', tipo: 'EPP', stock: 0, limite: 1, costoso: true, cursoRequerido: 'ALTURAS',
-    piezas: [
-      { serie: 'ALT-001', estado: 'apto', ultimaInspeccion: '2026-09-20', prestada: false },
-      { serie: 'ALT-002', estado: 'apto', ultimaInspeccion: '2026-09-20', prestada: false },
-      { serie: 'ALT-003', estado: 'no apto', ultimaInspeccion: '2026-08-02', prestada: false },
-    ],
-  },
-  {
-    codigo: 'ALT-POL', nombre: 'Arnés Poliéster', tipo: 'EPP', stock: 0, limite: 1, costoso: true, cursoRequerido: 'ALTURAS',
-    piezas: [
-      { serie: 'ALT-024', estado: 'apto', ultimaInspeccion: '2026-09-28', prestada: false },
-      { serie: 'ALT-025', estado: 'apto', ultimaInspeccion: '2026-09-28', prestada: false },
-    ],
-  },
-  {
-    codigo: 'ALT-BAN', nombre: 'Bandola', tipo: 'EPP', stock: 0, limite: 1, cursoRequerido: 'ALTURAS',
-    piezas: [
-      { serie: 'BAN-010', estado: 'apto', ultimaInspeccion: '2026-09-15', prestada: false },
-      { serie: 'BAN-011', estado: 'no apto', ultimaInspeccion: '2026-07-30', prestada: false },
-      { serie: 'BAN-012', estado: 'apto', ultimaInspeccion: '2026-09-15', prestada: false },
-    ],
-  },
-  {
-    codigo: 'ALT-GAN', nombre: 'Gancho doble de vida', tipo: 'EPP', stock: 0, limite: 1, cursoRequerido: 'ALTURAS',
-    piezas: [
-      { serie: 'GAN-100', estado: 'apto', ultimaInspeccion: '2026-09-10', prestada: false },
-      { serie: 'GAN-101', estado: 'apto', ultimaInspeccion: '2026-09-10', prestada: false },
-    ],
-  },
-{ codigo: 'HER-MPU', nombre: 'Minipulidor', tipo: 'Herramienta', stock: 0, limite: 1, costoso: true, cursoRequerido: 'CALIENTE', piezas: piezas('MPU', 3) },
-  { codigo: 'HER-FLX', nombre: 'Flexómetro', tipo: 'Herramienta', stock: 0, limite: 1, piezas: piezas('FLX', 20) },
-  { codigo: 'HER-GAS', nombre: 'Detector de gases', tipo: 'Herramienta', stock: 0, limite: 1, costoso: true, cursoRequerido: 'CONFINADOS', piezas: piezas('GAS', 3) },
-  { codigo: 'EPP-RET', nombre: 'Retráctil 3 mts', tipo: 'EPP', stock: 0, limite: 1, costoso: true, cursoRequerido: 'ALTURAS', piezas: piezas('RET', 8) },
-  { codigo: 'HER-MAR', nombre: 'Marro bola', tipo: 'Herramienta', stock: 0, limite: 1, piezas: piezas('MAR', 10) },
-  { codigo: 'HER-CIN', nombre: 'Cincel', tipo: 'Herramienta', stock: 0, limite: 2, piezas: piezas('CIN', 15, [3]) },
-  { codigo: 'HER-EXT', nombre: 'Extensión eléctrica', tipo: 'Herramienta', stock: 0, limite: 1, piezas: piezas('EXT', 9) },
-  { codigo: 'HER-REF', nombre: 'Reflector o lámpara', tipo: 'Herramienta', stock: 0, limite: 1, piezas: piezas('REF', 7) },
-  // Consumibles: se entregan y no regresan, por eso van por cantidad (sin serie)
-  { codigo: 'EPP-CAS', nombre: 'Casco de seguridad', tipo: 'Consumible', stock: 40, limite: 1 },
-  { codigo: 'EPP-LEN', nombre: 'Lentes de seguridad', tipo: 'Consumible', stock: 60, limite: 1 },
-  { codigo: 'EPP-GUA', nombre: 'Guantes de protección', tipo: 'Consumible', stock: 120, limite: 2 },
-  { codigo: 'EPP-PET', nombre: 'Peto', tipo: 'Consumible', stock: 25, limite: 1 },
-  { codigo: 'EPP-POL', nombre: 'Polainas', tipo: 'Consumible', stock: 25, limite: 1 },
-  { codigo: 'HER-D9', nombre: 'Discos de corte 9"', tipo: 'Consumible', stock: 80, limite: 5 },
-  { codigo: 'HER-D45', nombre: 'Discos de corte 4 1/2"', tipo: 'Consumible', stock: 120, limite: 10 },
-];
-
 /** Inventario de cada almacén, por nombre de almacén. */
 type Inventarios = Record<string, Articulo[]>;
-
-/**
- * Inventario de ejemplo: el mismo catálogo en todos los almacenes, con
- * menos existencias en los almacenes chicos. Las piezas cambian de serie
- * por almacén (ALT-001 en Mittal, ALT-101 en Kepler...) para que cada
- * código sea único.
- */
-function inventariosDeEjemplo(): Inventarios {
-  const proporcion = [1, 0.7, 0.4, 0.6, 0.3, 0.15];
-  const inv: Inventarios = {};
-  ALMACENES.forEach((almacen, i) => {
-    inv[almacen] = CATALOGO_INICIAL.map((a) => ({
-      ...a,
-      stock: Math.round(a.stock * proporcion[i]),
-      piezas: a.piezas
-        ?.slice(0, Math.max(1, Math.round(a.piezas.length * proporcion[i])))
-        .map((p) => ({ ...p, serie: p.serie.replace(/\d+$/, (n) => String(i * 100 + Number(n)).padStart(3, '0')) })),
-    }));
-  });
-  return inv;
-}
 
 /** Fecha de hoy + n días en AAAA-MM-DD (hora local). */
 function dentroDe(dias: number): string {
@@ -131,137 +71,66 @@ function dentroDe(dias: number): string {
   return `${f.getFullYear()}-${String(f.getMonth() + 1).padStart(2, '0')}-${String(f.getDate()).padStart(2, '0')}`;
 }
 
-/** Algunos préstamos de ejemplo para que el tablero no arranque vacío. */
-function valesDeEjemplo(): Vale[] {
-  const vale = (
-    folio: string, almacen: string, emitido: number, entrega: number,
-    nombre: string, numero: string, lineas: LineaVale[], devuelto?: number,
-  ): Vale => ({
-    folio,
-    fecha: `${dentroDe(emitido)}T09:30:00`,
-    fechaDevolucion: dentroDe(entrega),
-    almacen,
-    almacenista: 'Oscar Salas',
-    empleado: { nombre, numeroEmpleado: numero, actividad: 'Mantenimiento general', motivo: 'Trabajo programado' },
-    lineas,
-    firma: '',
-    devuelto: devuelto === undefined ? undefined : `${dentroDe(devuelto)}T16:00:00`,
-  });
-  return [
-    vale('V-0005', 'Área HYL', -4, -1, 'Ana Torres', '10452', [
-      { codigo: 'HER-EXT', nombre: 'Extensión eléctrica', tipo: 'Herramienta', cantidad: 1, serie: 'EXT-301' },
-    ]),
-    vale('V-0004', 'Área Midrex', -15, -9, 'Pedro Núñez', '10388', [
-      {
-        codigo: 'HER-CIN', nombre: 'Cincel', tipo: 'Herramienta', cantidad: 1, serie: 'CIN-201',
-        recepcion: { condicion: 'danado', notas: 'Regresó con la punta despostillada.' },
-      },
-      { codigo: 'HER-CIN', nombre: 'Cincel', tipo: 'Herramienta', cantidad: 1, serie: 'CIN-202', recepcion: { condicion: 'bueno' } },
-    ], -8),
-    vale('V-0003', 'Colonia de Contratistas (Mittal)', -1, 6, 'Laura Ríos', '10511', [
-      { codigo: 'ALT-KEV', nombre: 'Arnés Kevlar', tipo: 'EPP', cantidad: 1, serie: 'ALT-001' },
-      { codigo: 'EPP-RET', nombre: 'Retráctil 3 mts', tipo: 'EPP', cantidad: 1, serie: 'RET-001' },
-    ]),
-    vale('V-0002', 'Central Kepler', -2, 5, 'Jorge Salinas', '10297', [
-      { codigo: 'HER-GAS', nombre: 'Detector de gases', tipo: 'Herramienta', cantidad: 1, serie: 'GAS-101' },
-      { codigo: 'HER-D45', nombre: 'Discos de corte 4 1/2"', tipo: 'Consumible', cantidad: 5 },
-    ]),
-    vale('V-0001', 'Central Kepler', -10, -3, 'Carlos Mendoza', '10120', [
-      { codigo: 'ALT-POL', nombre: 'Arnés Poliéster', tipo: 'EPP', cantidad: 1, serie: 'ALT-124' },
-      { codigo: 'HER-FLX', nombre: 'Flexómetro', tipo: 'Herramienta', cantidad: 1, serie: 'FLX-101' },
-      { codigo: 'HER-MAR', nombre: 'Marro bola', tipo: 'Herramienta', cantidad: 1, serie: 'MAR-101' },
-    ]),
-  ];
-}
-
 /** Los consumibles se gastan: nunca se devuelven. */
 export function seDevuelve(l: LineaVale): boolean {
   return l.tipo !== 'Consumible';
 }
 
-/**
- * Saca del inventario lo que dice un vale.
- * Devuelve una copia: no modifica el inventario original.
- */
-function sacarDelInventario(inv: Inventarios, vale: Vale): Inventarios {
-  const lista = inv[vale.almacen];
-  if (!lista) return inv;
-  return {
-    ...inv,
-    [vale.almacen]: lista.map((a) => {
-      const lineas = vale.lineas.filter((l) => l.codigo === a.codigo);
-      if (lineas.length === 0) return a;
-      if (a.piezas) {
-        const series = lineas.map((l) => l.serie);
-        return { ...a, piezas: a.piezas.map((p) => (series.includes(p.serie) ? { ...p, prestada: true } : p)) };
-      }
-      const total = lineas.reduce((s, l) => s + l.cantidad, 0);
-      return { ...a, stock: a.stock - total };
-    }),
-  };
+/** El mensaje que manda Flask ({ok: false, mensaje}) o uno genérico si no hubo respuesta. */
+function mensajeDe(e: unknown): string {
+  if (e instanceof HttpErrorResponse) {
+    if (e.status === 0) return 'No se pudo conectar con el servidor. Revisa que el backend esté encendido.';
+    return e.error?.mensaje ?? `Error del servidor (${e.status}).`;
+  }
+  return 'Ocurrió un error inesperado.';
 }
 
-/**
- * Regresa al inventario lo que se devolvió de un vale (los consumibles no).
- * Lo que llegó con daño no vuelve a estar disponible: la pieza queda
- * "no apta" y las unidades por cantidad pasan a "dañadas".
- */
-function regresarAlInventario(inv: Inventarios, vale: Vale): Inventarios {
-  const lista = inv[vale.almacen];
-  if (!lista) return inv;
-  return {
-    ...inv,
-    [vale.almacen]: lista.map((a) => {
-      const lineas = vale.lineas.filter((l) => l.codigo === a.codigo && seDevuelve(l));
-      if (lineas.length === 0) return a;
-      if (a.piezas) {
-        return {
-          ...a,
-          piezas: a.piezas.map((p) => {
-            const l = lineas.find((x) => x.serie === p.serie);
-            if (!l) return p;
-            return { ...p, prestada: false, estado: l.recepcion?.condicion === 'danado' ? 'no apto' : p.estado };
-          }),
-        };
-      }
-      let buenas = 0;
-      let danadas = 0;
-      for (const l of lineas) {
-        const conDano = l.recepcion?.condicion === 'danado' ? Math.min(l.recepcion.danadas ?? l.cantidad, l.cantidad) : 0;
-        danadas += conDano;
-        buenas += l.cantidad - conDano;
-      }
-      return { ...a, stock: a.stock + buenas, danados: (a.danados ?? 0) + danadas };
-    }),
-  };
-}
-
-/** Estado inicial de la demo: inventario de ejemplo con los préstamos y devoluciones ya aplicados. */
-function datosDeEjemplo(): { inventarios: Inventarios; vales: Vale[] } {
-  const vales = valesDeEjemplo();
-  const inventarios = [...vales]
-    .reverse() // del más antiguo al más reciente
-    .reduce((inv, v) => {
-      const despues = sacarDelInventario(inv, v);
-      return v.devuelto ? regresarAlInventario(despues, v) : despues;
-    }, inventariosDeEjemplo());
-  return { inventarios, vales };
-}
+/** Roles que usan el almacén (los demás no cargan sus datos). */
+const ROLES_ALMACEN = ['admin', 'almacenista', 'comprador'];
 
 @Injectable({ providedIn: 'root' })
 export class AlmacenService {
+  private http = inject(HttpClient);
+  private auth = inject(AuthService);
+  private api = `${this.auth.apiUrl}/almacen`;
+
   /* signal = una "caja" con un valor. Cuando cambia, la pantalla se actualiza sola. */
   readonly inventarios = signal<Inventarios>({});
   readonly vales = signal<Vale[]>([]);
+  /** true mientras llega la primera respuesta del servidor. */
+  readonly cargando = signal(false);
+  /** Mensaje si no se pudo cargar (backend apagado, sin permiso...). */
+  readonly errorCarga = signal('');
 
   constructor() {
-    const ejemplo = datosDeEjemplo();
-    this.inventarios.set(this.leer(CLAVE_INVENTARIOS, ejemplo.inventarios));
-    this.vales.set(this.leer(CLAVE_VALES, ejemplo.vales));
+    // Al iniciar sesión (o cambiar de usuario) se cargan sus almacenes; al salir se limpia todo
+    effect(() => {
+      const usuario = this.auth.usuario();
+      untracked(() => {
+        if (usuario && ROLES_ALMACEN.includes(usuario.rol)) {
+          void this.cargar();
+        } else {
+          this.inventarios.set({});
+          this.vales.set([]);
+        }
+      });
+    });
   }
 
-  /** El siguiente folio: V-0001, V-0002... (computed se recalcula solo cuando cambian los vales) */
-  readonly siguienteFolio = computed(() => 'V-' + String(this.vales().length + 1).padStart(4, '0'));
+  /** Pide al servidor el inventario y los vales de los almacenes del usuario. */
+  async cargar(): Promise<void> {
+    this.cargando.set(true);
+    try {
+      const r = await firstValueFrom(this.http.get<{ inventarios: Inventarios; vales: Vale[] }>(`${this.api}/estado`));
+      this.inventarios.set(r.inventarios);
+      this.vales.set(r.vales);
+      this.errorCarga.set('');
+    } catch (e) {
+      this.errorCarga.set(mensajeDe(e));
+    } finally {
+      this.cargando.set(false);
+    }
+  }
 
   /** Los artículos de un almacén. */
   catalogoDe(almacen: string): Articulo[] {
@@ -284,7 +153,7 @@ export class AlmacenService {
 
   /** Cuántas unidades se pueden entregar ahora mismo. */
   disponibles(a: Articulo): number {
-    return a.piezas ? a.piezas.filter((p) => p.estado === 'apto' && !p.prestada).length : a.stock;
+    return a.piezas ? a.piezas.filter(piezaEntregable).length : a.stock;
   }
 
   /** Activo, vencido (ya pasó su fecha de entrega), devuelto o entregado (solo consumibles). */
@@ -312,7 +181,9 @@ export class AlmacenService {
 
   /** Piezas "no apto" o unidades que regresaron dañadas: existen, pero no se pueden prestar. */
   noAptas(a: Articulo): number {
-    return (a.piezas?.filter((p) => p.estado === 'no apto').length ?? 0) + (a.danados ?? 0);
+    // No apta, o en el almacén con la certificación vencida (no se puede entregar hasta recertificarla)
+    const piezas = a.piezas?.filter((p) => p.estado === 'no apto' || (!p.prestada && estadoCertificacion(p) === 'vencida')).length ?? 0;
+    return piezas + (a.danados ?? 0);
   }
 
   /** ¿Es equipo de alto valor? (se busca en el catálogo del almacén del vale) */
@@ -349,19 +220,35 @@ export class AlmacenService {
     };
   }
 
+  /* =====================================================
+     PRÉSTAMO
+  ===================================================== */
+
   /**
-   * Guarda el vale y descuenta existencias de su almacén.
-   * update() recibe el valor anterior y devuelve el nuevo
-   * (no se modifica el original: se crea una copia).
+   * Guarda el vale en el servidor (que asigna el folio y descuenta existencias).
+   * trabajadorId = el trabajador de RH identificado con su credencial (si se escaneó).
    */
-  registrarVale(vale: Vale): string | null {
-    // El servicio vuelve a revisar todo: la pantalla puede tener datos viejos
+  async registrarVale(vale: Vale, trabajadorId?: number): Promise<{ vale: Vale } | { error: string }> {
+    // Revisión rápida aquí; el servidor vuelve a revisar todo con los datos al día
     const error = this.validarVale(vale);
-    if (error) return error;
-    this.inventarios.update((inv) => sacarDelInventario(inv, vale));
-    this.vales.update((lista) => [vale, ...lista]);
-    this.guardar();
-    return null;
+    if (error) return { error };
+    try {
+      const guardado = await firstValueFrom(
+        this.http.post<Vale>(`${this.api}/vales`, {
+          almacen: vale.almacen,
+          empleado: { ...vale.empleado, trabajadorId },
+          fechaDevolucion: vale.fechaDevolucion,
+          lineas: vale.lineas.map((l) => ({ codigo: l.codigo, serie: l.serie, cantidad: l.cantidad })),
+          firma: vale.firma,
+          autorizoSupervisor: vale.autorizoSupervisor,
+        }),
+      );
+      await this.cargar();
+      return { vale: guardado };
+    } catch (e) {
+      await this.cargar(); // por si alguien más prestó lo mismo: la pantalla se pone al día
+      return { error: mensajeDe(e) };
+    }
   }
 
   /**
@@ -387,6 +274,7 @@ export class AlmacenService {
         if (!pieza) return `La serie ${l.serie} no pertenece a ${a.nombre}.`;
         if (pieza.estado === 'no apto') return `${l.serie} está marcado como NO APTO.`;
         if (pieza.prestada) return `${l.serie} ya está prestado.`;
+        if (estadoCertificacion(pieza) === 'vencida') return `${l.serie}: su certificación venció el ${pieza.certificacionVence}. No se puede prestar hasta recertificarla.`;
         if (series.has(l.serie)) return `${l.serie} está dos veces en el vale.`;
         series.add(l.serie);
       } else {
@@ -404,14 +292,73 @@ export class AlmacenService {
    * Regresa el motivo si NO puede, o '' si sí.
    */
   faltaCurso(a: Articulo, cursos: string[] | undefined): string {
-    if (!a.cursoRequerido) return '';
-    const curso = nombreCurso(a.cursoRequerido);
-    if (!cursos) return `${a.nombre} requiere el curso "${curso}": escanea la credencial del trabajador para verificarlo.`;
-    if (!cursos.includes(a.cursoRequerido)) return `${a.nombre} requiere el curso "${curso}" vigente, y el trabajador no lo tiene.`;
+    for (const clave of this.cursosRequeridos(a)) {
+      const curso = nombreCurso(clave);
+      if (!cursos) return `${a.nombre} requiere el curso "${curso}": escanea la credencial del trabajador para verificarlo.`;
+      if (!cursos.includes(clave)) return `${a.nombre} requiere el curso "${curso}" vigente, y el trabajador no lo tiene.`;
+    }
     return '';
   }
 
-  /** ¿Ya existe esta serie en algún almacén? (las series son únicas en toda la empresa) */
+  /** Cursos que debe tener vigentes quien se lleve este artículo. El EPP siempre pide la inducción. */
+  cursosRequeridos(a: Articulo): string[] {
+    const cursos = a.tipo === 'EPP' ? [CURSO_INDUCCION] : [];
+    if (a.cursoRequerido && !cursos.includes(a.cursoRequerido)) cursos.push(a.cursoRequerido);
+    return cursos;
+  }
+
+  /**
+   * El trabajador regresó el equipo.
+   * recepciones[i] = cómo llegó el renglón i del vale (condición, notas y fotos).
+   * Lo que llegó bien vuelve al stock; lo dañado queda apartado. Regresa el error o ''.
+   */
+  async registrarDevolucion(folio: string, recepciones: (Recepcion | undefined)[]): Promise<string> {
+    try {
+      await firstValueFrom(
+        this.http.post(`${this.api}/vales/${encodeURIComponent(folio)}/devolucion`, { recepciones: recepciones.map((r) => r ?? null) }),
+      );
+      await this.cargar();
+      return '';
+    } catch (e) {
+      await this.cargar();
+      return mensajeDe(e);
+    }
+  }
+
+  /* =====================================================
+     CERTIFICACIONES
+  ===================================================== */
+
+  /** Piezas con certificación de los almacenes indicados, de la que vence primero a la última. */
+  certificaciones(almacenes: string[]): { almacen: string; articulo: Articulo; pieza: Pieza; estado: EstadoCertificacion; dias: number }[] {
+    return almacenes
+      .flatMap((almacen) =>
+        this.catalogoDe(almacen).flatMap((articulo) =>
+          (articulo.piezas ?? [])
+            .filter((p) => p.certificacionVence && p.estado !== 'no apto')
+            .map((pieza) => ({ almacen, articulo, pieza, estado: estadoCertificacion(pieza), dias: diasParaVencer(pieza) })),
+        ),
+      )
+      .sort((a, b) => a.dias - b.dias);
+  }
+
+  /** Registra una nueva fecha de certificación para una pieza. Regresa el error, o '' si quedó. */
+  async recertificar(almacen: string, serie: string, vence: string): Promise<string> {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(vence) || vence < dentroDe(0)) return 'La nueva fecha de vencimiento debe ser hoy o después.';
+    try {
+      await firstValueFrom(this.http.post(`${this.api}/certificaciones`, { almacen, serie, vence }));
+      await this.cargar();
+      return '';
+    } catch (e) {
+      return mensajeDe(e);
+    }
+  }
+
+  /* =====================================================
+     ALTA DE ARTÍCULOS
+  ===================================================== */
+
+  /** ¿Ya existe esta serie en los almacenes que veo? (el servidor revisa en TODA la empresa) */
   existeSerie(serie: string): boolean {
     return Object.values(this.inventarios()).some((lista) => lista.some((a) => a.piezas?.some((p) => mismoCodigo(p.serie, serie))));
   }
@@ -443,133 +390,48 @@ export class AlmacenService {
    * Agrega equipo a un almacén (artículo nuevo o más unidades de uno que ya existe)
    * y SUMA al stock. Regresa las etiquetas a imprimir, o el error si algo no cuadra.
    */
-  agregarArticulo(almacen: string, e: EntradaArticulo): { etiquetas: Etiqueta[] } | { error: string } {
-    // Todo se guarda limpio (ALT'024 → ALT-024) y se compara sin importar separadores
-    const codigo = limpiarCodigo(e.codigo);
-    const nombre = e.nombre.trim();
-    const consumible = e.tipo === 'Consumible';
-    const series = e.series.map(limpiarCodigo).filter(Boolean);
-
-    if (!ALMACENES.includes(almacen)) return { error: 'Elige el almacén.' };
-    if (llaveCodigo(codigo).length < 2 || codigo.length > 20) return { error: 'El código debe tener de 2 a 20 letras o números.' };
-    if (!nombre) return { error: 'Escribe el nombre del artículo.' };
-    if (!Number.isInteger(e.limite) || e.limite < 1) return { error: 'El máximo por vale debe ser 1 o más.' };
-
-    // El mismo código no puede ser de otro tipo en otro almacén
-    const igual = this.articuloEnCualquierAlmacen(codigo);
-    if (igual && (igual.tipo === 'Consumible') !== consumible) {
-      return { error: `${codigo} ya está registrado como ${igual.tipo}.` };
+  async agregarArticulo(almacen: string, entrada: EntradaArticulo): Promise<{ etiquetas: Etiqueta[] } | { error: string }> {
+    try {
+      const r = await firstValueFrom(this.http.post<{ etiquetas: Etiqueta[] }>(`${this.api}/articulos`, { almacen, entrada }));
+      await this.cargar();
+      return r;
+    } catch (e) {
+      return { error: mensajeDe(e) };
     }
-
-    if (consumible) {
-      if (!Number.isInteger(e.cantidad) || e.cantidad < 1 || e.cantidad > 100000) return { error: 'Escribe cuántas unidades entran.' };
-    } else {
-      if (!series.length) return { error: 'La herramienta y el EPP necesitan su número de serie (una por pieza).' };
-      const mala = series.find((x) => llaveCodigo(x).length < 2 || x.length > 30);
-      if (mala) return { error: `Serie con formato inválido: ${mala}. Debe tener de 2 a 30 letras o números.` };
-      const repetida = series.find((x, i) => series.findIndex((y) => mismoCodigo(x, y)) !== i);
-      if (repetida) return { error: `La serie ${repetida} está repetida en la lista.` };
-      const existente = series.find((x) => this.existeSerie(x));
-      if (existente) return { error: `La serie ${existente} ya está registrada.` };
-    }
-
-    const hoy = new Date().toISOString().slice(0, 10);
-    const nuevasPiezas: Pieza[] = series.map((serie) => ({ serie, estado: 'apto', ultimaInspeccion: hoy, prestada: false }));
-
-    this.inventarios.update((inv) => {
-      const lista = inv[almacen] ?? [];
-      const actual = lista.find((a) => mismoCodigo(a.codigo, codigo));
-      let actualizado: Articulo;
-      if (!actual) {
-        actualizado = {
-          codigo,
-          nombre,
-          tipo: e.tipo,
-          limite: e.limite,
-          costoso: !consumible && e.costoso,
-          cursoRequerido: consumible ? undefined : e.cursoRequerido || undefined,
-          stock: consumible ? e.cantidad : 0,
-          piezas: consumible ? undefined : nuevasPiezas,
-        };
-      } else if (consumible) {
-        actualizado = { ...actual, stock: actual.stock + e.cantidad };
-      } else {
-        actualizado = { ...actual, piezas: [...(actual.piezas ?? []), ...nuevasPiezas] };
-      }
-      return { ...inv, [almacen]: actual ? lista.map((a) => (a === actual ? actualizado : a)) : [...lista, actualizado] };
-    });
-    this.guardar();
-
-    const articulo = this.catalogoDe(almacen).find((a) => mismoCodigo(a.codigo, codigo))!;
-    return {
-      etiquetas: consumible
-        ? [this.etiquetaConsumible(almacen, articulo)]
-        : nuevasPiezas.map((p) => this.etiquetaPieza(almacen, articulo, p)),
-    };
   }
 
   /** Etiquetas de un artículo (todas sus piezas, o una del código si es consumible). */
   etiquetasDe(almacen: string, codigo: string): Etiqueta[] {
     const a = this.catalogoDe(almacen).find((x) => mismoCodigo(x.codigo, codigo));
     if (!a) return [];
-    return a.piezas ? a.piezas.map((p) => this.etiquetaPieza(almacen, a, p)) : [this.etiquetaConsumible(almacen, a)];
+    return a.piezas
+      ? a.piezas.map((p) => ({ valor: p.serie, nombre: a.nombre, detalle: `Serie · ${a.codigo}`, almacen }))
+      : [{ valor: a.codigo, nombre: a.nombre, detalle: 'Código · consumible', almacen }];
   }
 
-  private etiquetaPieza(almacen: string, a: Articulo, p: Pieza): Etiqueta {
-    return { valor: p.serie, nombre: a.nombre, detalle: `Serie · ${a.codigo}`, almacen };
+  /* =====================================================
+     TRASPASOS ENTRE ALMACENES
+  ===================================================== */
+
+  /** Historial de traspasos que salen o llegan a mis almacenes. */
+  async traspasos(): Promise<Traspaso[]> {
+    return firstValueFrom(this.http.get<Traspaso[]>(`${this.api}/traspasos`));
   }
 
-  private etiquetaConsumible(almacen: string, a: Articulo): Etiqueta {
-    return { valor: a.codigo, nombre: a.nombre, detalle: 'Código · consumible', almacen };
-  }
-
-  /**
-   * El trabajador regresó el equipo.
-   * recepciones[i] = cómo llegó el renglón i del vale (condición, notas y fotos).
-   * Lo que llegó bien vuelve al stock; lo dañado queda apartado.
-   * Regresa false si no se pudo guardar en el navegador (por ejemplo, fotos muy pesadas).
-   */
-  registrarDevolucion(folio: string, recepciones: (Recepcion | undefined)[]): boolean {
-    const original = this.vales().find((v) => v.folio === folio);
-    if (!original || original.devuelto) return true;
-    const vale: Vale = {
-      ...original,
-      devuelto: new Date().toISOString(),
-      lineas: original.lineas.map((l, i) =>
-        seDevuelve(l) ? { ...l, recepcion: recepciones[i] ?? { condicion: 'bueno' } } : l,
-      ),
-    };
-    this.inventarios.update((inv) => regresarAlInventario(inv, vale));
-    this.vales.update((lista) => lista.map((v) => (v === original ? vale : v)));
-    return this.guardar();
-  }
-
-  /** Vuelve a los datos de ejemplo (útil antes de la demostración). */
-  reiniciar(): void {
-    const ejemplo = datosDeEjemplo();
-    this.inventarios.set(ejemplo.inventarios);
-    this.vales.set(ejemplo.vales);
-    this.guardar();
-  }
-
-  /* ---------- localStorage: try/catch porque en modo incógnito puede fallar ---------- */
-  private leer<T>(clave: string, porDefecto: T): T {
+  /** Mueve piezas (por serie) y consumibles (por cantidad) de un almacén a otro. */
+  async traspasar(
+    origen: string,
+    destino: string,
+    lineas: { codigo: string; serie?: string; cantidad: number }[],
+    notas: string,
+  ): Promise<{ folio: string } | { error: string }> {
     try {
-      const texto = localStorage.getItem(clave);
-      return texto ? (JSON.parse(texto) as T) : porDefecto;
-    } catch {
-      return porDefecto;
-    }
-  }
-
-  private guardar(): boolean {
-    try {
-      localStorage.setItem(CLAVE_INVENTARIOS, JSON.stringify(this.inventarios()));
-      localStorage.setItem(CLAVE_VALES, JSON.stringify(this.vales()));
-      return true;
-    } catch {
-      /* si no se puede guardar (sin espacio, modo incógnito), los datos siguen en memoria mientras la página esté abierta */
-      return false;
+      const r = await firstValueFrom(this.http.post<{ folio: string }>(`${this.api}/traspasos`, { origen, destino, lineas, notas }));
+      await this.cargar();
+      return r;
+    } catch (e) {
+      await this.cargar();
+      return { error: mensajeDe(e) };
     }
   }
 }

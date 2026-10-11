@@ -17,8 +17,11 @@ from flask_cors import CORS
 from sqlalchemy import text
 from sqlalchemy.engine import URL
 
+from almacen_routes import almacen_bp
 from auth_routes import auth_bp
 from extensions import db
+from reportes_routes import reportes_bp
+from rh_routes import rh_bp
 
 load_dotenv()  # lee backend/.env (usuario y contraseña NUNCA van en el código)
 
@@ -37,16 +40,16 @@ app.config["SQLALCHEMY_DATABASE_URI"] = URL.create(
 # use_pure: la extensión en C de mysql-connector truena (segfault) con Python 3.14
 app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {"pool_pre_ping": True, "connect_args": {"use_pure": True}}
 
+# Las devoluciones pueden traer fotos (ya reducidas en el celular): hasta 16 MB por petición
+app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024
+
 db.init_app(app)
 CORS(app, origins=["http://localhost:4200"])
 
 app.register_blueprint(auth_bp)
-
-# Pendiente: rh_routes.py consulta las tablas viejas de schema.sql
-# (trabajadores con id, articulos, movimientos...). Se registra cuando
-# sus consultas estén adaptadas a la BD Inventarios:
-#     from rh_routes import rh_bp
-#     app.register_blueprint(rh_bp)
+app.register_blueprint(almacen_bp)
+app.register_blueprint(rh_bp)
+app.register_blueprint(reportes_bp)
 
 
 @app.get("/api/salud")

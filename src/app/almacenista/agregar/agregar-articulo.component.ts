@@ -16,11 +16,12 @@ import { CLASE_TIPO } from '../estado-prestamo';
 import { EtiquetasComponent } from '../etiquetas/etiquetas.component';
 import { CURSOS } from '../../compartido/cursos';
 import { contieneCodigo, limpiarCodigo, llaveCodigo, mismoCodigo } from '../../compartido/codigos';
-
+import { BotonEscanerComponent } from '../../compartido/escaner/boton-escaner.component';
+import { LectorDirective } from '../../compartido/escaner/lector.directive';
 
 @Component({
   selector: 'app-agregar-articulo',
-  imports: [RouterLink, EtiquetasComponent],
+  imports: [RouterLink, EtiquetasComponent, BotonEscanerComponent, LectorDirective],
   templateUrl: './agregar-articulo.component.html',
   styleUrl: './agregar-articulo.component.css',
 })
@@ -59,6 +60,13 @@ export class AgregarArticuloComponent {
   readonly costoso = signal(false);
   /** Curso que debe tener vigente quien lo pida ('' = ninguno). */
   readonly cursoRequerido = signal('');
+  /** Equipo con certificación: las piezas que entran traen su fecha de vencimiento. */
+  readonly requiereCertificacion = signal(false);
+  readonly certificacionVence = signal('');
+  /** ¿Pide fecha de certificación? (lo marca el artículo que ya existe, o la casilla del nuevo) */
+  readonly pideCertificacion = computed(() =>
+    !this.consumible() && (this.existente() ? !!this.existente()!.requiereCertificacion : this.requiereCertificacion()),
+  );
   readonly cursos = CURSOS;
 
   /** Tipo y código efectivos (del existente o de lo capturado). */
@@ -71,6 +79,8 @@ export class AgregarArticuloComponent {
   readonly serieEscrita = signal('');
   readonly cuantasGenerar = signal(1);
   readonly cantidad = signal(1);
+  /** Respuesta a cada serie leída con la cámara (se ve sobre la cámara). */
+  readonly avisoSerie = signal<{ texto: string; tipo: 'ok' | 'alerta' } | null>(null);
 
   /** Problema con la serie que se está escribiendo ('' = se puede agregar). */
   readonly errorSerie = computed(() => {
@@ -97,6 +107,9 @@ export class AgregarArticuloComponent {
       if (!(this.limite() >= 1)) return 'El máximo por vale debe ser 1 o más.';
     }
     if (this.consumible()) return this.cantidad() >= 1 ? '' : 'Escribe cuántas unidades entran.';
+    if (this.pideCertificacion() && (!this.certificacionVence() || this.certificacionVence() < this.hoy())) {
+      return 'Indica cuándo vence la certificación (hoy o después).';
+    }
     return this.series().length ? '' : 'Agrega al menos un número de serie.';
   });
 
@@ -154,6 +167,19 @@ export class AgregarArticuloComponent {
     this.serieEscrita.set('');
   }
 
+  /** Serie leída con la cámara o con la pistola fuera del campo. */
+  leerSerie(texto: string): void {
+    this.serieEscrita.set(texto);
+    const s = limpiarCodigo(texto);
+    const problema = this.errorSerie();
+    if (problema) {
+      this.avisoSerie.set({ texto: `${s}: ${problema}`, tipo: 'alerta' });
+      return;
+    }
+    this.agregarSerie();
+    this.avisoSerie.set({ texto: `${s} agregada (${this.series().length} en la lista).`, tipo: 'ok' });
+  }
+
   quitarSerie(s: string): void {
     this.series.update((l) => l.filter((x) => x !== s));
   }
@@ -164,20 +190,22 @@ export class AgregarArticuloComponent {
     this.series.update((l) => [...l, ...this.almacen.seriesSugeridas(this.codigoFinal(), n, l)]);
   }
 
-  guardar(): void {
+  async guardar(): Promise<void> {
     if (this.falta() || this.guardando()) {
       this.error.set(this.falta());
       return;
     }
     this.guardando.set(true);
     const a = this.existente();
-    const r = this.almacen.agregarArticulo(this.destino(), {
+    const r = await this.almacen.agregarArticulo(this.destino(), {
       codigo: this.codigoFinal(),
       nombre: a?.nombre ?? this.nombre(),
       tipo: this.tipoFinal(),
       limite: a?.limite ?? this.limite(),
       costoso: a?.costoso ?? this.costoso(),
       cursoRequerido: a ? a.cursoRequerido : this.cursoRequerido() || undefined,
+      requiereCertificacion: a ? a.requiereCertificacion : this.requiereCertificacion(),
+      certificacionVence: this.pideCertificacion() ? this.certificacionVence() : undefined,
       series: this.series(),
       cantidad: this.cantidad(),
     });
@@ -203,9 +231,15 @@ export class AgregarArticuloComponent {
     this.limite.set(1);
     this.costoso.set(false);
     this.cursoRequerido.set('');
+    this.requiereCertificacion.set(false);
+    this.certificacionVence.set('');
     this.series.set([]);
     this.cantidad.set(1);
     this.error.set('');
+  }
+
+  hoy(): string {
+    return new Date().toLocaleDateString('en-CA');
   }
 
   imprimir(): void {

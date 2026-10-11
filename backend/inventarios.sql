@@ -10,7 +10,7 @@
 -- Se puede volver a ejecutar: todo es IF NOT EXISTS / OR REPLACE.
 -- utf8mb4_unicode_ci: acepta acentos y ñ, y las búsquedas con LIKE
 -- ignoran acentos y mayúsculas ("perez" encuentra a "Pérez").
--- Datos de ejemplo: inventarios_datos.sql
+-- Datos de prueba: python crear_bd.py --datos (los arma datos_prueba.py)
 -- =====================================================================
 CREATE DATABASE IF NOT EXISTS Inventarios
   DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
@@ -65,7 +65,7 @@ CREATE TABLE IF NOT EXISTS trabajadores (
     compania_contratista VARCHAR(150) DEFAULT 'MANTENIMIENTO INDUSTRIAL IMHOTEP S. DE R.L. DE C.V.',
     administrador VARCHAR(100) NULL,
     fecha_emision DATE NULL,                       -- emisión del gafete
-    foto_ruta VARCHAR(255) NULL,                   -- nombre del archivo de la foto (no la imagen)
+    foto MEDIUMTEXT NULL,                          -- foto de la credencial (imagen reducida, data:image/jpeg...)
     reglas_oro BOOLEAN NOT NULL DEFAULT FALSE,     -- firmó las 10 Reglas de Oro
     fps_nivel0 BOOLEAN NOT NULL DEFAULT FALSE,
     fecha_ingreso DATE NULL,
@@ -132,6 +132,7 @@ CREATE TABLE IF NOT EXISTS catalogo (
     stock_minimo INT NOT NULL DEFAULT 3,           -- con esto o menos sale en "stock bajo"
     costoso BOOLEAN NOT NULL DEFAULT FALSE,        -- alto valor: al devolverlo se piden notas y fotos
     id_curso_requerido INT NULL,                   -- solo se presta a quien tenga ese curso vigente
+    requiere_certificacion BOOLEAN NOT NULL DEFAULT FALSE, -- cada pieza tiene fecha de vencimiento
     activo BOOLEAN NOT NULL DEFAULT TRUE,
     CONSTRAINT fk_catalogo_curso FOREIGN KEY (id_curso_requerido) REFERENCES curso(id_curso),
     CONSTRAINT chk_catalogo_limite CHECK (limite_por_vale > 0),
@@ -171,6 +172,7 @@ CREATE TABLE IF NOT EXISTS inventario_almacen_individual (
         'baja'
     ) NOT NULL DEFAULT 'disponible',
     ultima_inspeccion DATE NULL,                   -- copia de la más reciente en la tabla inspeccion
+    certificacion_vence DATE NULL,                 -- vencida = no se presta (solo si el artículo requiere certificación)
     CONSTRAINT fk_individual_catalogo FOREIGN KEY (id_catalogo) REFERENCES catalogo(id_catalogo),
     CONSTRAINT fk_individual_almacen FOREIGN KEY (id_almacen) REFERENCES almacen(id_almacen),
     INDEX idx_individual_almacen (id_almacen, estatus)
@@ -232,7 +234,9 @@ CREATE TABLE IF NOT EXISTS vale (
     folio VARCHAR(20) NOT NULL UNIQUE,             -- V-0001 (entrega) o ADE-0001 (adeudos)
     tipo ENUM('ENTREGA', 'ADEUDOS') NOT NULL DEFAULT 'ENTREGA',
     id_almacen INT NULL,                           -- NULL en vales de adeudos (los emite RH)
-    id_trabajador INT NOT NULL,                    -- quién recibe
+    id_trabajador INT NULL,                        -- quién recibe (NULL = se capturó a mano, no está en RH)
+    nombre_trabajador VARCHAR(150) NOT NULL,       -- como se imprimió en el vale
+    numero_empleado VARCHAR(30) NULL,
     id_usuario INT NOT NULL,                       -- quién entrega (almacenista) o emite (RH)
     id_solicitud INT NULL,                         -- si nació de una solicitud
     id_obra INT NULL,
@@ -240,7 +244,7 @@ CREATE TABLE IF NOT EXISTS vale (
     motivo VARCHAR(255) NULL,                      -- para qué ocupa el equipo
     fecha DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     fecha_devolucion DATE NULL,                    -- fecha estimada de entrega (NULL = solo consumibles)
-    firma_ruta VARCHAR(255) NULL,                  -- archivo PNG de la firma (no la imagen en la BD)
+    firma MEDIUMTEXT NULL,                         -- firma del trabajador (PNG en base64, pesa pocos KB)
     autorizo_supervisor VARCHAR(100) NULL,         -- si se pasó el límite por vale
     devuelto_en DATETIME NULL,                     -- NULL = sigue prestado
     observaciones VARCHAR(255) NULL,
@@ -274,6 +278,30 @@ CREATE TABLE IF NOT EXISTS vale_detalle (
     CONSTRAINT fk_valedet_pieza FOREIGN KEY (id_invalmind) REFERENCES inventario_almacen_individual(id_invalmind)
 ) ENGINE=InnoDB;
 
+-- Fotos opcionales de cómo regresó un renglón (equipo de alto valor o dañado)
+CREATE TABLE IF NOT EXISTS vale_detalle_foto (
+    id_vale_detalle_foto INT AUTO_INCREMENT PRIMARY KEY,
+    id_vale_detalle INT NOT NULL,
+    imagen MEDIUMTEXT NOT NULL,                    -- reducida en el celular antes de subirla
+    creado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_foto_valedet FOREIGN KEY (id_vale_detalle) REFERENCES vale_detalle(id_vale_detalle) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+-- Traspasos: equipo que se mueve de un almacén a otro (T-0001)
+CREATE TABLE IF NOT EXISTS traspaso (
+    id_traspaso INT AUTO_INCREMENT PRIMARY KEY,
+    folio VARCHAR(20) NOT NULL UNIQUE,
+    id_almacen_origen INT NOT NULL,
+    id_almacen_destino INT NOT NULL,
+    id_usuario INT NOT NULL,
+    fecha DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    notas VARCHAR(500) NULL,
+    CONSTRAINT chk_traspaso_distinto CHECK (id_almacen_origen <> id_almacen_destino),
+    CONSTRAINT fk_traspaso_origen FOREIGN KEY (id_almacen_origen) REFERENCES almacen(id_almacen),
+    CONSTRAINT fk_traspaso_destino FOREIGN KEY (id_almacen_destino) REFERENCES almacen(id_almacen),
+    CONSTRAINT fk_traspaso_usuario FOREIGN KEY (id_usuario) REFERENCES usuario(id_usuario)
+) ENGINE=InnoDB;
+
 -- ---------------------------------------------------------------------
 -- 6. MOVIMIENTOS (kardex): cada entrada o salida de un artículo.
 --    Es la fuente de los adeudos y del historial de cada trabajador.
@@ -282,16 +310,19 @@ CREATE TABLE IF NOT EXISTS vale_detalle (
 --      DANO                  -> regresa dañado (cierra el adeudo, no vuelve a prestarse)
 --      PERDIDA               -> no regresó (el adeudo sigue hasta que RH lo resuelva)
 --      ENTRADA / AJUSTE      -> compras o conteo físico (sin trabajador)
+--      TRASPASO_SALIDA / TRASPASO_ENTRADA -> cambio de almacén (sin trabajador)
 -- ---------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS movimiento (
     id_movimiento INT AUTO_INCREMENT PRIMARY KEY,
-    tipo ENUM('ENTREGA', 'DEVOLUCION', 'REPOSICION', 'DANO', 'PERDIDA', 'ENTRADA', 'AJUSTE') NOT NULL,
+    tipo ENUM('ENTREGA', 'DEVOLUCION', 'REPOSICION', 'DANO', 'PERDIDA', 'ENTRADA', 'AJUSTE',
+              'TRASPASO_SALIDA', 'TRASPASO_ENTRADA') NOT NULL,
     id_almacen INT NOT NULL,
     id_catalogo INT NOT NULL,
     id_invalmind INT NULL,
     talla VARCHAR(10) NOT NULL DEFAULT '',
     id_trabajador INT NULL,                        -- NULL en ENTRADA y AJUSTE
     id_vale INT NULL,
+    id_traspaso INT NULL,
     cantidad INT NOT NULL,
     id_usuario INT NOT NULL,                       -- responsable que lo registró
     notas VARCHAR(500) NULL,
@@ -302,24 +333,28 @@ CREATE TABLE IF NOT EXISTS movimiento (
     CONSTRAINT fk_mov_pieza FOREIGN KEY (id_invalmind) REFERENCES inventario_almacen_individual(id_invalmind),
     CONSTRAINT fk_mov_trabajador FOREIGN KEY (id_trabajador) REFERENCES trabajadores(id_trabajador),
     CONSTRAINT fk_mov_vale FOREIGN KEY (id_vale) REFERENCES vale(id_vale),
+    CONSTRAINT fk_mov_traspaso FOREIGN KEY (id_traspaso) REFERENCES traspaso(id_traspaso),
     CONSTRAINT fk_mov_usuario FOREIGN KEY (id_usuario) REFERENCES usuario(id_usuario),
     INDEX idx_mov_trabajador (id_trabajador, fecha),   -- kardex y adeudos con cientos de miles de registros
     INDEX idx_mov_almacen (id_almacen, fecha)
 ) ENGINE=InnoDB;
 
--- Fotos opcionales de una devolución (DEVOLUCION o DANO).
--- Se guarda solo la ruta del archivo en el servidor, NUNCA la imagen en la BD.
-CREATE TABLE IF NOT EXISTS movimiento_foto (
-    id_movimiento_foto INT AUTO_INCREMENT PRIMARY KEY,
-    id_movimiento INT NOT NULL,
-    ruta VARCHAR(255) NOT NULL,
-    creado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT fk_foto_movimiento FOREIGN KEY (id_movimiento) REFERENCES movimiento(id_movimiento) ON DELETE CASCADE
-) ENGINE=InnoDB;
-
 -- ---------------------------------------------------------------------
 -- 7. VISTAS: consultas listas para el backend (se usan como tablas)
 -- ---------------------------------------------------------------------
+
+-- Certificaciones de las piezas: vencidas y por vencer (30 días) primero
+CREATE OR REPLACE VIEW v_certificaciones AS
+SELECT i.id_invalmind, i.codigo AS serie, c.clave, c.nombre, a.nombre_almacen, i.estatus,
+       i.certificacion_vence,
+       DATEDIFF(i.certificacion_vence, CURDATE()) AS dias,
+       CASE WHEN i.certificacion_vence < CURDATE() THEN 'vencida'
+            WHEN DATEDIFF(i.certificacion_vence, CURDATE()) <= 30 THEN 'por-vencer'
+            ELSE 'vigente' END AS estado
+FROM inventario_almacen_individual i
+JOIN catalogo c ON c.id_catalogo = i.id_catalogo
+JOIN almacen a ON a.id_almacen = i.id_almacen
+WHERE i.certificacion_vence IS NOT NULL AND i.estatus <> 'baja';
 
 -- Cursos vigentes de cada trabajador
 CREATE OR REPLACE VIEW v_cursos_vigentes AS

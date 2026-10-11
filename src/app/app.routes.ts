@@ -3,8 +3,9 @@ import { LoginComponent } from './login.component/login.component';
 
 import { requiereRol, soloInvitados } from './auth/auth.guard';
 
-// Cada panel solo lo abre su rol (el administrador puede entrar a todos).
-// canMatch evita incluso descargar el código de un panel ajeno.
+// Cada panel solo lo abre su rol. Recursos Humanos es SOLO para RH
+// (el administrador tampoco entra). canMatch evita incluso descargar el
+// código de un panel ajeno.
 export const routes: Routes = [
   {
     path: '',
@@ -21,7 +22,7 @@ export const routes: Routes = [
   },
   {
     path: 'rh',
-    canMatch: [requiereRol('admin', 'rh')],
+    canMatch: [requiereRol('rh')],
     loadChildren: () => import('./rh/rh.routes').then((m) => m.RH_ROUTES),
   },
   {

@@ -40,7 +40,7 @@
         @if (vista() === 'exterior') {
           <span class="inline-flex items-center gap-1.5 rounded-full bg-white/90 px-2.5 py-1 shadow-sm"><span class="size-2.5 rounded-full bg-emerald-400"></span>Flujo de surtido</span>
           <span class="inline-flex items-center gap-1.5 rounded-full bg-white/90 px-2.5 py-1 shadow-sm"><span class="h-1.5 w-3 rounded-sm bg-green-500"></span>Al día</span>
-          <span class="inline-flex items-center gap-1.5 rounded-full bg-white/90 px-2.5 py-1 shadow-sm"><span class="h-1.5 w-3 rounded-sm bg-amber-500"></span>Stock bajo</span>
+          <span class="inline-flex items-center gap-1.5 rounded-full bg-white/90 px-2.5 py-1 shadow-sm"><span class="h-1.5 w-3 rounded-sm bg-orange-500"></span>Stock bajo</span>
           <span class="inline-flex items-center gap-1.5 rounded-full bg-white/90 px-2.5 py-1 shadow-sm"><span class="h-1.5 w-3 rounded-sm bg-orange-500"></span>Vencidos</span>
         } @else {
           <span class="inline-flex items-center gap-1.5 rounded-full bg-white/90 px-2.5 py-1 shadow-sm"><span class="size-2.5 rounded-sm" [style.background]="hex(colorTipo.Herramienta)"></span>Herramienta</span>
@@ -98,7 +98,7 @@
                 @if (n.acceso && n.resumen.vencidos) {
                   <span class="shrink-0 rounded-full bg-orange-50 px-2 py-0.5 text-[11px] font-semibold text-orange-700 dark:bg-orange-500/10 dark:text-orange-300">{{ n.resumen.vencidos }} venc.</span>
                 } @else if (n.acceso && n.resumen.stockBajo.length) {
-                  <span class="shrink-0 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">{{ n.resumen.stockBajo.length }} bajo</span>
+                  <span class="shrink-0 rounded-full bg-orange-50 px-2 py-0.5 text-[11px] font-semibold text-orange-700 dark:bg-orange-500/10 dark:text-orange-300">{{ n.resumen.stockBajo.length }} bajo</span>
                 }
               </button>
             </li>
@@ -134,12 +134,15 @@
           <span class="sr-only">Buscar herramienta</span>
           <svg class="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-gray-400" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" /></svg>
           <input
+            appLector
+            (lector)="busqueda.set($event)"
             type="search"
             placeholder="¿Dónde está…? Nombre, código o serie"
             [value]="busqueda()"
             (input)="busqueda.set(valor($event))"
-            class="h-10 w-full rounded-xl border border-gray-200 bg-gray-50 pr-3 pl-9 text-base outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/15 sm:text-sm dark:border-white/10 dark:bg-white/5 dark:text-white"
+            class="h-10 w-full rounded-xl border border-gray-200 bg-gray-50 pr-10 pl-9 text-base outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/15 sm:text-sm dark:border-white/10 dark:bg-white/5 dark:text-white"
           />
+          <app-boton-escaner titulo="Escanea una etiqueta para ubicarla" [clase]="'absolute top-1/2 right-1.5 -translate-y-1/2 inline-flex size-7 items-center justify-center rounded-lg text-gray-400 transition hover:bg-gray-100 hover:text-blue-600 dark:hover:bg-white/10'" (leido)="busqueda.set($event)" />
         </label>
 
         @if (busqueda()) {
@@ -173,7 +176,7 @@
                   type="button"
                   (click)="elegirAnaquel(an.codigo, a.codigo)"
                   class="w-full rounded-xl border p-3 text-left transition"
-                  [class]="articuloSel() === a.codigo ? 'border-amber-400 bg-amber-50 ring-2 ring-amber-300/50 dark:bg-amber-500/10' : 'border-gray-200 hover:border-gray-300 dark:border-white/10'"
+                  [class]="articuloSel() === a.codigo ? 'border-orange-400 bg-orange-50 ring-2 ring-orange-300/50 dark:bg-orange-500/10' : 'border-gray-200 hover:border-gray-300 dark:border-white/10'"
                 >
                   <div class="flex items-start justify-between gap-2">
                     <div class="min-w-0">
@@ -181,7 +184,7 @@
                       <p class="font-mono text-[11px] text-gray-500">{{ a.codigo }} · nivel {{ nivel + 1 }}</p>
                     </div>
                     @if (a.costoso) {
-                      <span class="shrink-0 rounded-full bg-violet-50 px-2 py-0.5 text-[10px] font-semibold text-violet-700 dark:bg-violet-500/10 dark:text-violet-300">Alto valor</span>
+                      <span class="shrink-0 rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-700 dark:bg-blue-500/10 dark:text-blue-300">Alto valor</span>
                     }
                   </div>
                   <div class="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs">

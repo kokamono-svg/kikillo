@@ -6,16 +6,13 @@
 // =====================================================================
 import { Component, computed, inject } from '@angular/core';
 import { DatePipe } from '@angular/common';
-import { toSignal } from '@angular/core/rxjs-interop';
 import { Router, RouterLink } from '@angular/router';
-import { catchError, of } from 'rxjs';
 import { AuthService } from '../auth/auth.service';
 import { OpcionMenu, PanelLayoutComponent } from '../compartido/panel-layout/panel-layout.component';
 import { ICONOS } from '../compartido/panel-layout/iconos';
 import { AccesoAlmacen } from '../almacenista/acceso-almacen.service';
 import { ALMACENES, AlmacenService } from '../almacenista/almacen.service';
 import { ESTADO_PRESTAMO } from '../almacenista/estado-prestamo';
-import { RhService } from '../rh/rh.service';
 
 @Component({
   selector: 'app-dashboard',
@@ -36,15 +33,16 @@ export class DashboardComponent {
     { ruta: '/dashboard', texto: 'Inicio', icono: ICONOS.inicio, exacto: true },
     { ruta: '/almacen/prestamos', texto: 'Préstamos', icono: ICONOS.flechas },
     { ruta: '/almacen/inventario', texto: 'Inventario', icono: ICONOS.caja },
-    { ruta: '/rh', texto: 'Personal', icono: ICONOS.personas },
+    { ruta: '/almacen/stock', texto: 'Stock', icono: ICONOS.almacen },
+    { ruta: '/almacen/reportes', texto: 'Reportes', icono: ICONOS.barras },
   ];
 
   /** Accesos directos a lo que más se usa. */
   readonly accesos = [
     { ruta: '/almacen/nuevo', texto: 'Nuevo préstamo', detalle: 'Entregar equipo con vale y firma', icono: ICONOS.mas, color: 'bg-blue-600 text-white' },
     { ruta: '/almacen/prestamos', texto: 'Devoluciones', detalle: 'Recibir equipo prestado', icono: ICONOS.flechas, color: 'bg-emerald-50 text-emerald-600' },
-    { ruta: '/rh/alta', texto: 'Alta de personal', detalle: 'Registrar un trabajador', icono: ICONOS.agregarPersona, color: 'bg-violet-50 text-violet-600' },
-    { ruta: '/rh/kardex', texto: 'Kardex', detalle: 'Historial por trabajador', icono: ICONOS.lista, color: 'bg-amber-50 text-amber-600' },
+    { ruta: '/almacen/traspasos', texto: 'Traspasos', detalle: 'Mover equipo entre almacenes', icono: ICONOS.flechaDerecha, color: 'bg-blue-50 text-blue-600' },
+    { ruta: '/almacen/reportes', texto: 'Reportes', detalle: 'Existencias, movimientos y adeudos', icono: ICONOS.barras, color: 'bg-gray-100 text-gray-900' },
   ];
 
   /** Saludo según la hora. */
@@ -72,11 +70,10 @@ export class DashboardComponent {
   );
 
   readonly vales = computed(() => this.almacen.valesDe(ALMACENES));
+  /** Certificaciones vencidas o por vencer en todos los almacenes. */
+  readonly certificaciones = computed(() => this.almacen.certificaciones(ALMACENES).filter((c) => c.estado !== 'vigente'));
   readonly vencidos = computed(() => this.vales().filter((v) => this.almacen.estadoDe(v) === 'vencido'));
   readonly recientes = computed(() => this.vales().slice(0, 5));
-
-  /* ---------- Recursos Humanos (si el backend no responde, el panel sigue funcionando) ---------- */
-  readonly rh = toSignal(inject(RhService).obtenerResumen().pipe(catchError(() => of(null))), { initialValue: null });
 
   porcentaje(parte: number, total: number): number {
     return total ? Math.round((parte / total) * 100) : 0;

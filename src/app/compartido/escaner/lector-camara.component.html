@@ -1,0 +1,92 @@
+<!-- =====================================================
+     LECTOR DE CÓDIGOS CON CÁMARA
+     Celular: pantalla completa. Computadora: ventana centrada.
+====================================================== -->
+<div class="fixed inset-0 z-[80] flex items-center justify-center bg-black sm:bg-black/70 sm:p-6" role="dialog" aria-modal="true" [attr.aria-label]="titulo()">
+  <div class="relative flex size-full flex-col overflow-hidden bg-black sm:h-auto sm:max-h-full sm:max-w-2xl sm:rounded-2xl">
+    <!-- Barra superior -->
+    <div class="absolute inset-x-0 top-0 z-10 flex items-center gap-3 bg-linear-to-b from-black/75 to-transparent p-3 text-white">
+      <button type="button" (click)="cerrar.emit()" aria-label="Cerrar cámara" class="inline-flex size-11 shrink-0 items-center justify-center rounded-full bg-black/40 hover:bg-black/60">
+        <svg class="size-6" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+      </button>
+      <p class="min-w-0 flex-1 truncate text-sm font-semibold">{{ titulo() }}</p>
+      @if (hayLinterna()) {
+        <button type="button" (click)="cambiarLinterna()" [attr.aria-pressed]="linterna()" aria-label="Linterna"
+          class="inline-flex size-11 shrink-0 items-center justify-center rounded-full" [class]="linterna() ? 'bg-orange-400 text-black' : 'bg-black/40 hover:bg-black/60'">
+          <svg class="size-6" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" /></svg>
+        </button>
+      }
+    </div>
+
+    <!-- Video + marco de enfoque -->
+    <div class="relative flex min-h-0 flex-1 items-center justify-center">
+      <video #video playsinline muted autoplay class="size-full object-cover sm:aspect-[4/3] sm:h-auto" [class.invisible]="estado() !== 'lista'"></video>
+
+      @if (estado() === 'lista') {
+        <div class="pointer-events-none absolute inset-0 flex items-center justify-center" aria-hidden="true">
+          <div class="marco relative aspect-[4/3] w-[78%] max-w-md rounded-3xl shadow-[0_0_0_9999px_rgba(0,0,0,0.45)]">
+            <span class="esquina top-0 left-0 rounded-tl-3xl border-t-4 border-l-4"></span>
+            <span class="esquina top-0 right-0 rounded-tr-3xl border-t-4 border-r-4"></span>
+            <span class="esquina bottom-0 left-0 rounded-bl-3xl border-b-4 border-l-4"></span>
+            <span class="esquina right-0 bottom-0 rounded-br-3xl border-r-4 border-b-4"></span>
+            <span class="linea"></span>
+          </div>
+        </div>
+        <p class="absolute inset-x-0 bottom-4 text-center text-sm text-white/85">Apunta al código QR o de barras</p>
+      }
+
+      @if (mensaje(); as m) {
+        <div class="absolute inset-x-6 top-20 mx-auto max-w-sm rounded-xl px-4 py-3 text-sm font-semibold text-white shadow-lg" [class]="m.tipo === 'ok' ? 'bg-emerald-600' : 'bg-orange-500'" role="status">
+          {{ m.texto }}
+        </div>
+      } @else if (ultimo(); as u) {
+        <div class="absolute inset-x-6 top-20 mx-auto flex max-w-sm items-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white shadow-lg" role="status">
+          <svg class="size-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
+          <span class="truncate font-mono">{{ u }}</span>
+        </div>
+      }
+
+      @if (estado() === 'iniciando') {
+        <p class="absolute text-sm text-white/80">Encendiendo la cámara…</p>
+      }
+
+      @if (estado() === 'error') {
+        <div class="absolute inset-x-6 mx-auto max-w-sm rounded-2xl bg-white p-5 text-center text-gray-900">
+          <p class="text-sm">{{ error() }}</p>
+          <div class="mt-4 flex flex-col gap-2">
+            <!-- capture: en celular abre directo la cámara del sistema -->
+            <label class="flex h-11 cursor-pointer items-center justify-center rounded-xl bg-blue-600 text-sm font-semibold text-white hover:bg-blue-700">
+              {{ leyendoFoto() ? 'Leyendo la foto…' : 'Leer el código desde una foto' }}
+              <input type="file" accept="image/*" capture="environment" class="sr-only" (change)="elegirFoto($event)" [disabled]="leyendoFoto()" />
+            </label>
+            <button type="button" (click)="reintentar()" class="h-11 rounded-xl border border-gray-300 text-sm font-semibold hover:bg-gray-50">Volver a intentar con la cámara</button>
+          </div>
+        </div>
+      }
+    </div>
+
+    <!-- Controles -->
+    @if (estado() === 'lista') {
+      <div class="grid grid-cols-3 items-center gap-2 bg-black px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))] text-white">
+        <label class="cursor-pointer text-xs text-white/70 underline-offset-2 hover:text-white hover:underline">
+          Usar una foto
+          <input type="file" accept="image/*" capture="environment" class="sr-only" (change)="elegirFoto($event)" />
+        </label>
+        @if (continuo()) {
+          <button type="button" (click)="cerrar.emit()" class="mx-auto h-11 rounded-full bg-white px-6 text-sm font-semibold text-black hover:bg-white/90">
+            Listo{{ cuantos() ? ' (' + cuantos() + ')' : '' }}
+          </button>
+        } @else {
+          <span></span>
+        }
+        @if (variasCamaras()) {
+          <button type="button" (click)="cambiarCamara()" aria-label="Cambiar de cámara" class="ml-auto inline-flex size-11 items-center justify-center rounded-full bg-white/15 hover:bg-white/25">
+            <svg class="size-6" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" /></svg>
+          </button>
+        } @else {
+          <span></span>
+        }
+      </div>
+    }
+  </div>
+</div>

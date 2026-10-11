@@ -14,10 +14,12 @@ import { ESTADO_PRESTAMO } from '../estado-prestamo';
 import { ValeImpresoComponent } from '../vale-impreso/vale-impreso.component';
 import { DevolucionComponent } from './devolucion/devolucion.component';
 import { contieneCodigo } from '../../compartido/codigos';
+import { BotonEscanerComponent } from '../../compartido/escaner/boton-escaner.component';
+import { LectorDirective } from '../../compartido/escaner/lector.directive';
 
 @Component({
   selector: 'app-almacen-prestamos',
-  imports: [DatePipe, ValeImpresoComponent, DevolucionComponent],
+  imports: [DatePipe, ValeImpresoComponent, DevolucionComponent, BotonEscanerComponent, LectorDirective],
   templateUrl: './prestamos.component.html',
 })
 export class PrestamosComponent {
@@ -86,18 +88,25 @@ export class PrestamosComponent {
     this.abierto.set(null);
   }
 
-  devolver(v: Vale, recepciones: (Recepcion | undefined)[]): void {
-    if (!this.acceso.puedePrestar()) return;
-    const guardado = this.almacen.registrarDevolucion(v.folio, recepciones);
+  /** true mientras el servidor registra la devolución. */
+  readonly guardando = signal(false);
+
+  async devolver(v: Vale, recepciones: (Recepcion | undefined)[]): Promise<void> {
+    if (!this.acceso.puedePrestar() || this.guardando()) return;
+    this.guardando.set(true);
+    const error = await this.almacen.registrarDevolucion(v.folio, recepciones);
+    this.guardando.set(false);
+    if (error) {
+      this.avisar(error, 'alerta');
+      return;
+    }
     this.devolviendo.set(false);
     const conDano = recepciones.filter((r) => r?.condicion === 'danado').length;
     this.avisar(
-      !guardado
-        ? 'Devolución registrada, pero no cupo en la memoria del navegador (fotos muy pesadas). Se perderá al recargar.'
-        : conDano
-          ? `Devolución de ${v.folio} registrada. ${conDano} ${conDano === 1 ? 'artículo quedó apartado' : 'artículos quedaron apartados'} por daño.`
-          : `Devolución de ${v.folio} registrada.`,
-      guardado && !conDano ? 'ok' : 'alerta',
+      conDano
+        ? `Devolución de ${v.folio} registrada. ${conDano} ${conDano === 1 ? 'artículo quedó apartado' : 'artículos quedaron apartados'} por daño.`
+        : `Devolución de ${v.folio} registrada.`,
+      conDano ? 'alerta' : 'ok',
     );
   }
 

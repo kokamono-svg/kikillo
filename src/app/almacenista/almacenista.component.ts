@@ -1,7 +1,7 @@
 import { Component, computed, effect, inject, signal, untracked, viewChild, ElementRef } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
-import { AlmacenService } from './almacen.service';
+import { AlmacenService, diasParaVencer, estadoCertificacion, piezaEntregable } from './almacen.service';
 import { Articulo, LineaVale, Pieza, Vale } from './almacen.models';
 import { FirmaPad } from './firma-pad/firma-pad';
 import { AuthService } from '../auth/auth.service';
@@ -28,10 +28,12 @@ import { contieneCodigo, limpiarCodigo } from '../compartido/codigos';
 
 /** PIN de supervisor para la demo. En producción se valida en el servidor. */
 const PIN_SUPERVISOR = '1234';
+import { BotonEscanerComponent } from '../compartido/escaner/boton-escaner.component';
+import { LectorDirective } from '../compartido/escaner/lector.directive';
 
 @Component({
   selector: 'app-almacenista',
-  imports: [FirmaPad, DatePipe, RouterLink, ValeImpresoComponent],
+  imports: [FirmaPad, DatePipe, RouterLink, ValeImpresoComponent, BotonEscanerComponent, LectorDirective],
   templateUrl: './almacenista.component.html',
   styleUrl: './almacenista.component.css',
 })
@@ -169,8 +171,17 @@ export class AlmacenistaComponent {
 
   /** Piezas que se pueden entregar ahora: aptas, sin prestar y que no están ya en el vale. */
   piezasLibres(a: Articulo): Pieza[] {
-    return (a.piezas ?? []).filter((p) => p.estado === 'apto' && !p.prestada && !this.piezaEnCarrito(p.serie));
+    // Aptas, sin prestar, con certificación vigente (si aplica) y que no estén ya en el vale
+    return (a.piezas ?? []).filter((p) => piezaEntregable(p) && !this.piezaEnCarrito(p.serie));
   }
+
+  /** Piezas de un artículo con la certificación vencida (no se prestan). */
+  certificacionesVencidas(a: Articulo): number {
+    return (a.piezas ?? []).filter((p) => p.estado === 'apto' && !p.prestada && estadoCertificacion(p) === 'vencida').length;
+  }
+
+  readonly estadoCertificacion = estadoCertificacion;
+  readonly diasParaVencer = diasParaVencer;
 
   /** ¿Esta pieza ya está en el carrito? (para deshabilitar su botón) */
   piezaEnCarrito(serie: string): boolean {
@@ -205,6 +216,11 @@ export class AlmacenistaComponent {
         this.avisar(`${serie} ya está asignado.`, 'alerta');
         return;
       }
+      // Regla: certificación vencida = no se presta hasta recertificarla
+      if (estadoCertificacion(pieza) === 'vencida') {
+        this.avisar(`${serie}: su certificación venció el ${pieza.certificacionVence}. No se puede prestar.`, 'alerta');
+        return;
+      }
     }
 
     const yaLleva = this.enCarrito(a.codigo);
@@ -234,6 +250,16 @@ export class AlmacenistaComponent {
       }
       return [...lista, { codigo: a.codigo, nombre: a.nombre, tipo: a.tipo, cantidad: 1, serie }];
     });
+    // Certificación por vencer: se presta, pero se avisa
+    const pieza = serie ? a.piezas?.find((p) => p.serie === serie) : undefined;
+    if (pieza && estadoCertificacion(pieza) === 'por-vencer') {
+      const dias = diasParaVencer(pieza);
+      this.avisar(
+        `${serie} agregado. Ojo: su certificación vence ${dias === 0 ? 'hoy' : dias === 1 ? 'mañana' : `en ${dias} días`} (${pieza.certificacionVence}).`,
+        'alerta',
+      );
+      return;
+    }
     this.avisar(`${a.nombre}${serie ? ' · ' + serie : ''} agregado.`, 'ok');
   }
 
@@ -241,8 +267,9 @@ export class AlmacenistaComponent {
    * Lectura de QR / pistola lectora.
    * La pistola funciona como un teclado: escribe el código y manda Enter.
    * Por eso basta con un input que reaccione al Enter.
+   * enfocar = false cuando lee la cámara (en celular no debe abrirse el teclado).
    */
-  escanear(): void {
+  escanear(enfocar = true): void {
     // ALT'024, alt 024 o ALT024: todos se leen como ALT-024
     const codigo = limpiarCodigo(this.codigoEscaneado());
     this.codigoEscaneado.set('');
@@ -252,9 +279,15 @@ export class AlmacenistaComponent {
       this.avisar(`El código ${codigo} no existe en el catálogo.`, 'alerta');
       return;
     }
-    this.inputEscaner()?.nativeElement.focus();
+    if (enfocar) this.inputEscaner()?.nativeElement.focus();
     // Si el código es la serie de una pieza, se agrega esa pieza exacta
     this.agregar(a, this.almacen.piezaPorCodigo(a, codigo)?.serie);
+  }
+
+  /** Código leído con la cámara o con la pistola fuera del campo. */
+  leerCodigo(texto: string, enfocar = true): void {
+    this.codigoEscaneado.set(texto);
+    this.escanear(enfocar);
   }
 
   /**
@@ -372,7 +405,7 @@ export class AlmacenistaComponent {
       return;
     }
     if (this.paso() === 3) {
-      this.emitirVale();
+      void this.emitirVale();
       return;
     }
     this.paso.update((p) => p + 1);
@@ -383,10 +416,14 @@ export class AlmacenistaComponent {
     if (this.paso() > 1) this.paso.update((p) => p - 1);
   }
 
-  /** Crea el vale con todos los datos, lo guarda y muestra el paso 4. */
-  private emitirVale(): void {
+  /** true mientras el servidor guarda el vale (evita mandarlo dos veces). */
+  readonly guardando = signal(false);
+
+  /** Crea el vale con todos los datos, lo guarda en el servidor y muestra el paso 4. */
+  private async emitirVale(): Promise<void> {
+    if (this.guardando()) return;
     const vale: Vale = {
-      folio: this.almacen.siguienteFolio(),
+      folio: '', // lo asigna el servidor (V-0001...)
       fecha: new Date().toISOString(),
       fechaDevolucion: this.fechaDevolucion(),
       almacen: this.almacenElegido(),
@@ -402,15 +439,18 @@ export class AlmacenistaComponent {
       firma: this.firma(),
       autorizoSupervisor: this.autorizoSupervisor() || undefined,
     };
-    // El servicio valida otra vez (stock, piezas prestadas o no aptas) antes de descontar
-    const error = this.almacen.registrarVale(vale);
-    if (error) {
-      this.avisar(error, 'alerta');
+    // El servidor valida otra vez (stock, piezas, cursos, certificación) antes de descontar
+    const t = this.gafete()?.trabajador;
+    this.guardando.set(true);
+    const r = await this.almacen.registrarVale(vale, t?.activo ? t.id : undefined);
+    this.guardando.set(false);
+    if ('error' in r) {
+      this.avisar(r.error, 'alerta');
       return;
     }
-    this.valeActual.set(vale);
+    this.valeActual.set(r.vale);
     this.paso.set(4);
-    this.avisar(`Vale ${vale.folio} generado.`, 'ok');
+    this.avisar(`Vale ${r.vale.folio} generado.`, 'ok');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 

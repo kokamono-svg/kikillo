@@ -29,11 +29,15 @@ export interface OpcionMenu {
 
 type Modulo = 'panel' | 'almacen' | 'rh';
 
-/** Módulos de la app y qué roles entran a cada uno. */
-const MODULOS: { id: Modulo; ruta: string; texto: string; icono: string; roles: Rol[] }[] = [
+/**
+ * Módulos de la app y qué roles entran a cada uno.
+ * soloVer: roles que ven la opción en el menú, pero bloqueada (con candado).
+ * Recursos Humanos: solo RH entra; el almacenista la ve bloqueada; admin y compras no la ven.
+ */
+const MODULOS: { id: Modulo; ruta: string; texto: string; icono: string; roles: Rol[]; soloVer?: Rol[] }[] = [
   { id: 'panel', ruta: '/dashboard', texto: 'Panel general', icono: ICONOS.barras, roles: ['admin'] },
   { id: 'almacen', ruta: '/almacen', texto: 'Almacén', icono: ICONOS.almacen, roles: ['admin', 'almacenista', 'comprador'] },
-  { id: 'rh', ruta: '/rh', texto: 'Recursos Humanos', icono: ICONOS.personas, roles: ['admin', 'rh'] },
+  { id: 'rh', ruta: '/rh', texto: 'Recursos Humanos', icono: ICONOS.personas, roles: ['rh'], soloVer: ['almacenista'] },
 ];
 
 @Component({
@@ -59,10 +63,14 @@ export class PanelLayoutComponent {
   /** En celular: menú lateral abierto o cerrado. */
   readonly menuAbierto = signal(false);
 
-  /** Accesos a otros módulos a los que también puede entrar (en la práctica, solo el administrador). */
+  /** Otros módulos que ve en el menú: a los que puede entrar y los bloqueados (bloqueado = true). */
   readonly otrosModulos = computed(() => {
     const rol = this.auth.usuario()?.rol;
-    return MODULOS.filter((m) => m.id !== this.modulo() && !!rol && m.roles.includes(rol));
+    if (!rol) return [];
+    return MODULOS.filter((m) => m.id !== this.modulo() && (m.roles.includes(rol) || !!m.soloVer?.includes(rol))).map((m) => ({
+      ...m,
+      bloqueado: !m.roles.includes(rol),
+    }));
   });
 
   /** Iniciales del usuario para el avatar. */

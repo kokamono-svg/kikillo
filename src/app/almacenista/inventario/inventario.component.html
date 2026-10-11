@@ -30,12 +30,15 @@
         <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
       </svg>
       <input
+        appLector
+        (lector)="busqueda.set($event)"
         type="search"
         placeholder="Buscar artículo, código o serie"
         [value]="busqueda()"
         (input)="busqueda.set(valor($event))"
-        class="h-11 w-full rounded-xl border border-gray-200 bg-white pr-4 pl-11 text-base text-gray-800 outline-none transition placeholder:text-gray-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/15 sm:text-sm dark:border-white/10 dark:bg-neutral-900 dark:text-white"
+        class="h-11 w-full rounded-xl border border-gray-200 bg-white pr-11 pl-11 text-base text-gray-800 outline-none transition placeholder:text-gray-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/15 sm:text-sm dark:border-white/10 dark:bg-neutral-900 dark:text-white"
       />
+      <app-boton-escaner titulo="Escanea una etiqueta para buscarla" [clase]="'absolute top-1/2 right-1.5 -translate-y-1/2 inline-flex size-8 items-center justify-center rounded-lg text-gray-400 transition hover:bg-gray-100 hover:text-blue-600 dark:hover:bg-white/10'" (leido)="busqueda.set($event)" />
     </div>
 
     <div class="flex gap-2 overflow-x-auto pb-1 lg:pb-0">
@@ -170,5 +173,8 @@
     <span class="inline-flex items-center gap-1.5"><span class="size-2 rounded-full bg-emerald-500"></span>Pieza disponible</span>
     <span class="inline-flex items-center gap-1.5"><span class="size-2 rounded-full bg-blue-500"></span>Prestada</span>
     <span class="inline-flex items-center gap-1.5"><span class="size-2 rounded-full bg-orange-400"></span>No apta (no se entrega)</span>
+    <span class="inline-flex items-center gap-1.5"><span class="size-2 rounded-full bg-orange-400"></span>Certificación por vencer</span>
+    <span class="inline-flex items-center gap-1.5"><span class="size-2 rounded-full bg-red-500"></span>Certificación vencida (no se entrega)</span>
+    <a routerLink="/almacen/certificaciones" class="font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400">Ver certificaciones →</a>
   </p>
 </div>

@@ -1,433 +1,418 @@
 # =====================================================================
-# rh_routes.py  (backend Flask, MySQL/MariaDB)
-# Endpoints del módulo de RH que consume rh.service.ts.
+# rh_routes.py  (backend Flask, MySQL)
+# Endpoints de RH que consume rh.service.ts:
+#   GET  /api/rh/resumen
+#   GET  /api/rh/trabajadores?q=            (también almacén: lector de credenciales)
+#   GET  /api/rh/trabajadores/<id>          (también almacén)
+#   POST /api/rh/trabajadores               alta rápida
+#   PUT  /api/rh/trabajadores/<id>/credencial
+#   GET  /api/rh/trabajadores/<id>/adeudos  (también almacén)
+#   GET  /api/rh/trabajadores/<id>/kardex
+#   GET  /api/rh/trabajadores/<id>/vales
+#   POST /api/rh/trabajadores/<id>/vales/adeudos
+#   POST /api/rh/bajas                      solo si no debe nada (409 con la lista si debe)
 #
-# Requiere: pip install flask flask-sqlalchemy flask-cors pymysql
-# En tu app.py:
-#     from flask_cors import CORS
-#     from rh_routes import rh_bp
-#     CORS(app, origins=["http://localhost:4200"])
-#     app.register_blueprint(rh_bp)
-#
-# Todos los endpoints exigen sesión con rol "rh" o "admin" (ver auth_routes.py).
+# Los adeudos salen de los MISMOS movimientos que registra el almacén:
+# lo que se presta en el almacén aparece aquí, y bloquea la baja.
 # =====================================================================
+import random
 import re
-from datetime import date, datetime, timedelta
+from collections import defaultdict
+from datetime import date, timedelta
+
 from flask import Blueprint, g, jsonify, request
-from sqlalchemy import bindparam, text
-from sqlalchemy.exc import IntegrityError
 
 from auth_routes import verificar_sesion
-from extensions import db  # tu instancia: db = SQLAlchemy()
+from codigos import SQL_LLAVE, limpiar_codigo, llave_codigo
+from comun import ErrorNegocio, ejecutar, iso, leer_fecha, q, tipo_rh, transaccion, uno
 
 rh_bp = Blueprint("rh", __name__, url_prefix="/api/rh")
+
+PUESTOS = {"Soldador", "Auxiliar", "Argonero", "Mecánico", "Electricista", "Estructurista", "Maniobrista"}
+OBLIGATORIOS = ["nombres", "apellidoPaterno", "nss", "puesto", "area", "contrato", "supervisor", "fechaIngreso", "tallaRopa", "tallaCalzado"]
+COMPANIA = "MANTENIMIENTO INDUSTRIAL IMHOTEP S. DE R.L. DE C.V."
+MAX_FOTO = 2_000_000
+# Lo único que el almacén puede consultar de RH: identificar al trabajador por su
+# credencial al prestar y ver si debe equipo (solo lectura). Todo lo demás es solo de RH.
+RUTAS_ALMACEN = {"rh.buscar_trabajadores", "rh.obtener_trabajador", "rh.adeudos"}
 
 
 @rh_bp.before_request
 def solo_rh():
-    """Se ejecuta antes de CADA endpoint de este archivo: sin sesión de RH no pasa nadie."""
     if request.method == "OPTIONS":
-        return None  # el preflight de CORS no lleva token
-    return verificar_sesion(("rh", "admin"))
+        return None
+    if request.endpoint in RUTAS_ALMACEN and request.method == "GET":
+        return verificar_sesion(("rh", "admin", "almacenista"))
+    return verificar_sesion(("rh",))
 
-# Mismas reglas que el formulario de Angular (el backend nunca confía en el frontend)
-PATRONES = {
-    "curp": re.compile(r"^[A-Z]{4}\d{6}[HM][A-Z]{5}[A-Z0-9]\d$"),
-    "rfc": re.compile(r"^[A-ZÑ&]{4}\d{6}[A-Z0-9]{3}$"),
-    "nss": re.compile(r"^\d{11}$"),
-}
-# Alta rápida: CURP y RFC son opcionales (si vienen, se valida su formato)
-OBLIGATORIOS = ["nombres", "apellidoPaterno", "nss", "puesto", "area",
-                "contrato", "supervisor", "fechaIngreso", "tallaRopa", "tallaCalzado"]
-PUESTOS = {"Soldador", "Auxiliar", "Argonero", "Mecánico", "Electricista", "Estructurista", "Maniobrista"}
 
 # ---------------------------------------------------------------------
-# Consultas reutilizables
+# Trabajador → JSON de Angular
 # ---------------------------------------------------------------------
-SQL_TRABAJADOR = """
-    SELECT id, numero_empleado, nombres, apellido_paterno, apellido_materno, curp, rfc, nss,
-           telefono, puesto, area, contrato, supervisor, fecha_ingreso, talla_ropa, talla_calzado,
-           doc_identificacion, doc_comprobante_dom, doc_datos_bancarios, doc_contrato_firmado,
-           doc_alta_imss, induccion_seguridad, activo, fecha_baja, motivo_baja
-    FROM trabajadores
+SQL_TRABAJADOR = "SELECT * FROM trabajadores"
+
+
+def _cursos(ids):
+    cursos = defaultdict(list)
+    if ids:
+        for c in q(
+            """SELECT tc.id_trabajador, cu.clave, tc.folio, tc.vigencia FROM trabajador_curso tc
+               JOIN curso cu ON cu.id_curso = tc.id_curso WHERE tc.id_trabajador IN :ids ORDER BY tc.vigencia DESC""",
+            ids=ids,
+        ):
+            cursos[c.id_trabajador].append({"clave": c.clave, "folio": c.folio or "", "vigencia": iso(c.vigencia)})
+    return cursos
+
+
+def _json(t, cursos):
+    hoy = date.today().isoformat()
+    mis_cursos = cursos.get(t.id_trabajador, [])
+    return {
+        "id": t.id_trabajador,
+        "numeroEmpleado": t.num_empleado or "",
+        "nombres": t.nombres,
+        "apellidoPaterno": t.apellido_paterno,
+        "apellidoMaterno": t.apellido_materno or "",
+        "curp": t.curp or "",
+        "rfc": t.rfc or "",
+        "nss": t.nss or "",
+        "telefono": t.telefono or "",
+        "puesto": t.puesto or "",
+        "area": t.area or "",
+        "contrato": t.contrato or "",
+        "supervisor": t.supervisor or "",
+        "fechaIngreso": iso(t.fecha_ingreso) or "",
+        "tallaRopa": t.talla_ropa or "",
+        "tallaCalzado": t.talla_calzado or "",
+        "documentos": {
+            "identificacion": bool(t.doc_identificacion),
+            "comprobanteDomicilio": bool(t.doc_comprobante_dom),
+            "datosBancarios": bool(t.doc_datos_bancarios),
+            "contratoFirmado": bool(t.doc_contrato_firmado),
+            "altaImss": bool(t.doc_alta_imss),
+        },
+        # La inducción es un curso: cuenta solo si está vigente
+        "induccionSeguridad": any(c["clave"] == "INDUCCION" and c["vigencia"] >= hoy for c in mis_cursos),
+        "numeroTarjeta": t.numero_tarjeta or "",
+        "compania": t.compania_contratista or COMPANIA,
+        "administrador": t.administrador or "",
+        "fechaEmision": iso(t.fecha_emision),
+        "foto": t.foto,
+        "cursos": mis_cursos,
+        "reglasOro": bool(t.reglas_oro),
+        "fpsNivel0": bool(t.fps_nivel0),
+        "activo": bool(t.activo),
+        "fechaBaja": iso(t.fecha_baja),
+        "motivoBaja": t.motivo_baja,
+    }
+
+
+def _trabajadores(where="", **params):
+    filas = q(f"{SQL_TRABAJADOR} {where}", **params)
+    cursos = _cursos([t.id_trabajador for t in filas])
+    return [_json(t, cursos) for t in filas]
+
+
+def _trabajador(id_t):
+    lista = _trabajadores("WHERE id_trabajador = :id", id=id_t)
+    if not lista:
+        raise ErrorNegocio("Trabajador no encontrado.", 404)
+    return lista[0]
+
+
+# ---------------------------------------------------------------------
+# Adeudos y movimientos (los mismos que registra el almacén)
+# ---------------------------------------------------------------------
+def _adeudos(id_t):
+    filas = q(
+        """SELECT c.clave, c.nombre, c.tipo, c.tipo_retorno, i.codigo AS serie, a.pendiente, a.fecha_entrega,
+                  al.nombre_almacen, v.folio
+           FROM v_adeudos a JOIN catalogo c ON c.id_catalogo = a.id_catalogo JOIN almacen al ON al.id_almacen = a.id_almacen
+           LEFT JOIN inventario_almacen_individual i ON i.id_invalmind = a.id_invalmind
+           LEFT JOIN vale v ON v.id_vale = a.id_vale
+           WHERE a.id_trabajador = :t ORDER BY a.fecha_entrega""",
+        t=id_t,
+    )
+    return [
+        {"articuloClave": f.clave, "descripcion": f.nombre, "tipoArticulo": tipo_rh(f.tipo, f.tipo_retorno), "idSerie": f.serie,
+         "cantidadPendiente": int(f.pendiente), "fechaEntrega": iso(f.fecha_entrega), "almacen": f.nombre_almacen, "folioVale": f.folio}
+        for f in filas
+    ]
+
+
+SQL_MOVIMIENTOS = """
+    SELECT m.id_movimiento, m.id_trabajador, m.fecha, m.tipo, c.clave, c.nombre, c.tipo AS tipo_art, c.tipo_retorno,
+           i.codigo AS serie, m.cantidad, al.nombre_almacen, v.folio, u.nombre_completo AS responsable, t.nombre_completo AS trabajador
+    FROM movimiento m JOIN catalogo c ON c.id_catalogo = m.id_catalogo JOIN almacen al ON al.id_almacen = m.id_almacen
+    JOIN usuario u ON u.id_usuario = m.id_usuario
+    LEFT JOIN inventario_almacen_individual i ON i.id_invalmind = m.id_invalmind
+    LEFT JOIN vale v ON v.id_vale = m.id_vale
+    LEFT JOIN trabajadores t ON t.id_trabajador = m.id_trabajador
+    WHERE m.tipo IN ('ENTREGA', 'DEVOLUCION', 'REPOSICION', 'DANO', 'PERDIDA') AND m.id_trabajador IS NOT NULL
 """
 
-# Adeudos: por artículo y por pieza, (entregas + reposiciones) - devoluciones.
-# Los consumibles quedan fuera con a.tipo <> 'Consumible'.
-SQL_ADEUDOS = text("""
-    SELECT a.clave, a.descripcion, a.tipo, m.id_serie,
-           SUM(CASE WHEN m.tipo IN ('ENTREGA','REPOSICION') THEN m.cantidad ELSE 0 END)
-         - SUM(CASE WHEN m.tipo = 'DEVOLUCION' THEN m.cantidad ELSE 0 END) AS pendiente,
-           MIN(m.fecha)   AS fecha_entrega,
-           MAX(al.nombre) AS almacen,
-           MAX(v.folio)   AS folio
-    FROM movimientos m
-    JOIN articulos a  ON a.id = m.articulo_id
-    JOIN almacenes al ON al.id = m.almacen_id
-    LEFT JOIN vales v ON v.id = m.vale_id
-    WHERE m.trabajador_id = :tid AND a.tipo <> 'Consumible'
-    GROUP BY a.id, a.clave, a.descripcion, a.tipo, m.id_serie
-    HAVING pendiente > 0
-    ORDER BY fecha_entrega
-""")
+
+def _movimiento_json(m):
+    return {"id": m.id_movimiento, "fecha": iso(m.fecha), "tipo": m.tipo, "articuloClave": m.clave, "descripcion": m.nombre,
+            "tipoArticulo": tipo_rh(m.tipo_art, m.tipo_retorno), "idSerie": m.serie, "cantidad": m.cantidad,
+            "almacen": m.nombre_almacen, "folioVale": m.folio, "responsable": m.responsable}
 
 
-def _iso(valor):
-    """Fecha de MySQL -> texto ISO para Angular (o None)."""
-    return valor.isoformat() if valor else None
+# =====================================================================
+# TABLERO
+# =====================================================================
+@rh_bp.get("/resumen")
+def resumen():
+    hoy = date.today()
+    hace30 = hoy - timedelta(days=30)
+    todos = _trabajadores("ORDER BY id_trabajador")
+    activos = [t for t in todos if t["activo"]]
+    por_id = {t["id"]: t for t in todos}
+
+    con_adeudos = []
+    for f in q("SELECT id_trabajador, SUM(pendiente) AS piezas, MIN(fecha_entrega) AS desde FROM v_adeudos GROUP BY id_trabajador"):
+        if f.id_trabajador in por_id:
+            con_adeudos.append({"trabajador": por_id[f.id_trabajador], "articulos": int(f.piezas),
+                                "diasMayor": (hoy - f.desde.date()).days})
+    con_adeudos.sort(key=lambda x: -x["diasMayor"])
+
+    # Ya no se capturan papeles en el alta: lo pendiente es la inducción
+    pendientes = [{"trabajador": t, "faltan": ["Inducción de seguridad"]} for t in activos if not t["induccionSeguridad"]]
+
+    areas = defaultdict(int)
+    for t in activos:
+        areas[t["area"] or "Sin área"] += 1
+
+    movimientos = [
+        {**_movimiento_json(m), "trabajadorId": m.id_trabajador, "trabajador": m.trabajador}
+        for m in q(SQL_MOVIMIENTOS + " ORDER BY m.fecha DESC, m.id_movimiento DESC LIMIT 8")
+    ]
+    recientes = sorted(
+        [{"trabajador": t, "tipo": "alta", "fecha": t["fechaIngreso"], "detalle": t["puesto"]} for t in todos if t["fechaIngreso"]]
+        + [{"trabajador": t, "tipo": "baja", "fecha": t["fechaBaja"], "detalle": t["motivoBaja"] or ""} for t in todos if t["fechaBaja"]],
+        key=lambda x: x["fecha"], reverse=True,
+    )[:6]
+    return jsonify(
+        activos=len(activos), inactivos=len(todos) - len(activos),
+        altasMes=sum(1 for t in todos if t["fechaIngreso"] and t["fechaIngreso"] >= hace30.isoformat()),
+        bajasMes=sum(1 for t in todos if t["fechaBaja"] and t["fechaBaja"] >= hace30.isoformat()),
+        conAdeudos=con_adeudos, pendientes=pendientes,
+        porArea=[{"area": a, "total": n} for a, n in sorted(areas.items(), key=lambda x: -x[1])],
+        movimientos=movimientos, recientes=recientes,
+    )
 
 
-def _trabajador_json(f):
-    """Fila de la BD -> objeto Trabajador de Angular (camelCase)."""
-    return {
-        "id": f.id, "numeroEmpleado": f.numero_empleado, "nombres": f.nombres,
-        "apellidoPaterno": f.apellido_paterno, "apellidoMaterno": f.apellido_materno or "",
-        "curp": f.curp, "rfc": f.rfc, "nss": f.nss, "telefono": f.telefono or "",
-        "puesto": f.puesto, "area": f.area, "contrato": f.contrato, "supervisor": f.supervisor,
-        "fechaIngreso": _iso(f.fecha_ingreso), "tallaRopa": f.talla_ropa, "tallaCalzado": f.talla_calzado,
-        "documentos": {
-            "identificacion": bool(f.doc_identificacion),
-            "comprobanteDomicilio": bool(f.doc_comprobante_dom),
-            "datosBancarios": bool(f.doc_datos_bancarios),
-            "contratoFirmado": bool(f.doc_contrato_firmado),
-            "altaImss": bool(f.doc_alta_imss),
-        },
-        "induccionSeguridad": bool(f.induccion_seguridad),
-        "activo": bool(f.activo), "fechaBaja": _iso(f.fecha_baja), "motivoBaja": f.motivo_baja,
-    }
-
-
-def _adeudo_json(f):
-    return {
-        "articuloClave": f.clave, "descripcion": f.descripcion, "tipoArticulo": f.tipo,
-        "idSerie": f.id_serie, "cantidadPendiente": int(f.pendiente),
-        "fechaEntrega": _iso(f.fecha_entrega), "almacen": f.almacen, "folioVale": f.folio,
-    }
-
-
-def _buscar_trabajador(tid):
-    return db.session.execute(text(SQL_TRABAJADOR + " WHERE id = :id"), {"id": tid}).fetchone()
-
-
-def _error(mensaje, status, **extra):
-    return jsonify(ok=False, mensaje=mensaje, **extra), status
-
-
-# ---------------------------------------------------------------------
+# =====================================================================
 # TRABAJADORES
-# ---------------------------------------------------------------------
+# =====================================================================
 @rh_bp.get("/trabajadores")
 def buscar_trabajadores():
-    """GET /api/rh/trabajadores?q=texto -> por número, nombre o CURP."""
-    q = request.args.get("q", "").strip()
-    if len(q) < 2:
+    """Por nombre, número de empleado, N° de tarjeta, NSS o CURP (activos y dados de baja)."""
+    termino = (request.args.get("q") or "").strip()
+    if len(termino) < 1:
         return jsonify([])
-    filas = db.session.execute(text(SQL_TRABAJADOR + """
-        WHERE numero_empleado LIKE :q OR curp LIKE :q
-           OR CONCAT_WS(' ', nombres, apellido_paterno, apellido_materno) LIKE :q
-        ORDER BY apellido_paterno, nombres LIMIT 20
-    """), {"q": f"%{q}%"}).fetchall()
-    return jsonify([_trabajador_json(f) for f in filas])
+    llave = llave_codigo(termino)
+    condiciones = ["nombre_completo LIKE :texto", "nss LIKE :texto"]
+    if llave:
+        condiciones += [f"{SQL_LLAVE.format(col=c)} LIKE :llave" for c in ("num_empleado", "numero_tarjeta", "curp", "nss")]
+    return jsonify(_trabajadores(
+        f"WHERE {' OR '.join(condiciones)} ORDER BY activo DESC, nombre_completo LIMIT 20",
+        texto=f"%{termino}%", llave=f"%{llave}%",
+    ))
 
 
-@rh_bp.get("/trabajadores/<int:tid>")
-def obtener_trabajador(tid):
-    f = _buscar_trabajador(tid)
-    return jsonify(_trabajador_json(f)) if f else _error("Trabajador no encontrado.", 404)
+@rh_bp.get("/trabajadores/<int:id_t>")
+@transaccion
+def obtener_trabajador(id_t):
+    return jsonify(_trabajador(id_t))
+
+
+def _tarjeta_libre(tarjeta, excepto=None):
+    otro = uno(
+        f"SELECT id_trabajador FROM trabajadores WHERE {SQL_LLAVE.format(col='numero_tarjeta')} = :t AND id_trabajador <> :id",
+        t=llave_codigo(tarjeta), id=excepto or 0,
+    )
+    if otro:
+        raise ErrorNegocio("Ese número de tarjeta ya pertenece a otro trabajador.", 409)
+
+
+def _guardar_cursos(id_t, cursos):
+    claves = {c.clave: c.id_curso for c in q("SELECT id_curso, clave FROM curso")}
+    ejecutar("DELETE FROM trabajador_curso WHERE id_trabajador = :t", t=id_t)
+    vistos = set()
+    for c in cursos or []:
+        if c.get("clave") not in claves or c["clave"] in vistos:
+            continue
+        vistos.add(c["clave"])
+        ejecutar(
+            "INSERT INTO trabajador_curso (id_trabajador, id_curso, folio, vigencia) VALUES (:t, :c, :f, :v)",
+            t=id_t, c=claves[c["clave"]], f=str(c.get("folio") or "")[:30] or None, v=leer_fecha(c.get("vigencia"), "Vigencia del curso"),
+        )
+
+
+def _foto(valor):
+    if not valor:
+        return None
+    if not str(valor).startswith("data:image") or len(valor) > MAX_FOTO:
+        raise ErrorNegocio("La foto no es válida o es demasiado grande.")
+    return valor
 
 
 @rh_bp.post("/trabajadores")
+@transaccion
 def crear_trabajador():
-    """
-    POST /api/rh/trabajadores  (alta)
-    El número de empleado NO viene en el body: se genera aquí a partir
-    del id autoincremental, así es único y consecutivo: IMH-00001.
-    """
+    """Alta rápida. El número de empleado lo genera el servidor (IMH-00001)."""
     d = request.get_json(silent=True) or {}
     faltan = [c for c in OBLIGATORIOS if not str(d.get(c, "")).strip()]
     if faltan:
-        return _error(f"Faltan campos: {', '.join(faltan)}.", 400)
-
+        raise ErrorNegocio(f"Faltan campos: {', '.join(faltan)}.")
     if d["puesto"] not in PUESTOS:
-        return _error("Puesto no válido.", 400)
-
-    for campo, patron in PATRONES.items():
-        # Vacío = no se capturó (se guarda NULL: la columna es UNIQUE y '' chocaría)
-        d[campo] = str(d.get(campo) or "").strip().upper() or None
-        if d[campo] and not patron.match(d[campo]):
-            return _error(f"{campo.upper()} con formato inválido.", 400)
-    if not d["nss"]:
-        return _error("Falta el NSS.", 400)
-
-    docs = d.get("documentos") or {}
-    try:
-        r = db.session.execute(text("""
-            INSERT INTO trabajadores (nombres, apellido_paterno, apellido_materno, curp, rfc, nss, telefono,
-                puesto, area, contrato, supervisor, fecha_ingreso, talla_ropa, talla_calzado,
-                doc_identificacion, doc_comprobante_dom, doc_datos_bancarios, doc_contrato_firmado,
-                doc_alta_imss, induccion_seguridad)
-            VALUES (:nombres, :ap, :am, :curp, :rfc, :nss, :tel, :puesto, :area, :contrato, :supervisor,
-                :ingreso, :ropa, :calzado, :d1, :d2, :d3, :d4, :d5, :induccion)
-        """), {
-            "nombres": d["nombres"].strip(), "ap": d["apellidoPaterno"].strip(),
-            "am": (d.get("apellidoMaterno") or "").strip(), "curp": d["curp"], "rfc": d["rfc"],
-            "nss": d["nss"], "tel": d.get("telefono") or None, "puesto": d["puesto"], "area": d["area"],
-            "contrato": d["contrato"], "supervisor": d["supervisor"], "ingreso": d["fechaIngreso"],
-            "ropa": d["tallaRopa"], "calzado": d["tallaCalzado"],
-            "d1": bool(docs.get("identificacion")), "d2": bool(docs.get("comprobanteDomicilio")),
-            "d3": bool(docs.get("datosBancarios")), "d4": bool(docs.get("contratoFirmado")),
-            "d5": bool(docs.get("altaImss")), "induccion": bool(d.get("induccionSeguridad")),
-        })
-        nuevo_id = r.lastrowid
-        # El id es único, por eso el número también lo es
-        db.session.execute(text("UPDATE trabajadores SET numero_empleado = :num WHERE id = :id"),
-                           {"num": f"IMH-{nuevo_id:05d}", "id": nuevo_id})
-        db.session.commit()
-    except IntegrityError:
-        db.session.rollback()  # NSS y CURP son UNIQUE
-        return _error("Ya existe un trabajador registrado con ese NSS o CURP.", 409)
-
-    return jsonify(_trabajador_json(_buscar_trabajador(nuevo_id))), 201
-
-
-# ---------------------------------------------------------------------
-# ADEUDOS Y KARDEX
-# ---------------------------------------------------------------------
-@rh_bp.get("/trabajadores/<int:tid>/adeudos")
-def adeudos(tid):
-    filas = db.session.execute(SQL_ADEUDOS, {"tid": tid}).fetchall()
-    return jsonify([_adeudo_json(f) for f in filas])
-
-
-@rh_bp.get("/trabajadores/<int:tid>/kardex")
-def kardex(tid):
-    """Todos los movimientos del trabajador, del más reciente al más antiguo."""
-    filas = db.session.execute(text("""
-        SELECT m.id, m.fecha, m.tipo, a.clave, a.descripcion, a.tipo AS tipo_articulo,
-               m.id_serie, m.cantidad, al.nombre AS almacen, v.folio, m.responsable
-        FROM movimientos m
-        JOIN articulos a  ON a.id = m.articulo_id
-        JOIN almacenes al ON al.id = m.almacen_id
-        LEFT JOIN vales v ON v.id = m.vale_id
-        WHERE m.trabajador_id = :tid
-        ORDER BY m.fecha DESC, m.id DESC
-    """), {"tid": tid}).fetchall()
-    return jsonify([{
-        "id": f.id, "fecha": _iso(f.fecha), "tipo": f.tipo, "articuloClave": f.clave,
-        "descripcion": f.descripcion, "tipoArticulo": f.tipo_articulo, "idSerie": f.id_serie,
-        "cantidad": f.cantidad, "almacen": f.almacen, "folioVale": f.folio, "responsable": f.responsable,
-    } for f in filas])
-
-
-# ---------------------------------------------------------------------
-# VALES
-# ---------------------------------------------------------------------
-@rh_bp.get("/trabajadores/<int:tid>/vales")
-def vales(tid):
-    t = _buscar_trabajador(tid)
-    if not t:
-        return _error("Trabajador no encontrado.", 404)
-    trabajador = _trabajador_json(t)
-
-    encabezados = db.session.execute(text("""
-        SELECT id, folio, tipo, fecha, responsable, observaciones
-        FROM vales WHERE trabajador_id = :tid ORDER BY fecha DESC
-    """), {"tid": tid}).fetchall()
-
-    resultado = []
-    for v in encabezados:
-        if v.tipo == "ENTREGA":
-            # Renglones = movimientos de entrega ligados al vale
-            filas = db.session.execute(text("""
-                SELECT a.descripcion, a.tipo, m.id_serie, m.cantidad, 'Bueno' AS estado
-                FROM movimientos m JOIN articulos a ON a.id = m.articulo_id
-                WHERE m.vale_id = :vid AND m.tipo = 'ENTREGA'
-            """), {"vid": v.id}).fetchall()
-        else:
-            # Renglones = foto guardada al generar el vale de adeudos
-            filas = db.session.execute(text("""
-                SELECT a.descripcion, a.tipo, r.id_serie, r.cantidad, r.estado
-                FROM vale_renglones r JOIN articulos a ON a.id = r.articulo_id
-                WHERE r.vale_id = :vid
-            """), {"vid": v.id}).fetchall()
-        resultado.append({
-            "folio": v.folio, "tipo": v.tipo, "fecha": _iso(v.fecha), "trabajador": trabajador,
-            "responsable": v.responsable, "observaciones": v.observaciones or "",
-            "renglones": [{"descripcion": r.descripcion, "tipoArticulo": r.tipo, "idSerie": r.id_serie,
-                           "cantidad": r.cantidad, "estado": r.estado} for r in filas],
-        })
-    return jsonify(resultado)
-
-
-@rh_bp.post("/trabajadores/<int:tid>/vales/adeudos")
-def generar_vale_adeudos(tid):
-    """Crea un vale ADE-#### con lo que el trabajador debe en este momento."""
-    # Quien emite es el usuario de la sesión, no lo que mande el navegador
-    emitido_por = g.usuario.nombre[:80]
-    if not _buscar_trabajador(tid):
-        return _error("Trabajador no encontrado.", 404)
-
-    pendientes = db.session.execute(SQL_ADEUDOS, {"tid": tid}).fetchall()
-    if not pendientes:
-        return _error("El trabajador no tiene adeudos.", 409)
-
-    r = db.session.execute(text("""
-        INSERT INTO vales (folio, tipo, trabajador_id, responsable, observaciones)
-        VALUES ('TEMP', 'ADEUDOS', :tid, :resp, 'Artículos pendientes de devolución al almacén.')
-    """), {"tid": tid, "resp": emitido_por})
-    vale_id = r.lastrowid
-    folio = f"ADE-{vale_id:04d}"
-    db.session.execute(text("UPDATE vales SET folio = :f WHERE id = :id"), {"f": folio, "id": vale_id})
-
-    for p in pendientes:
-        db.session.execute(text("""
-            INSERT INTO vale_renglones (vale_id, articulo_id, id_serie, cantidad, estado)
-            SELECT :vid, id, :serie, :cant, 'Pendiente' FROM articulos WHERE clave = :clave
-        """), {"vid": vale_id, "serie": p.id_serie, "cant": int(p.pendiente), "clave": p.clave})
-    db.session.commit()
-
-    # Se regresa con el mismo formato que GET /vales
-    return jsonify(next(v for v in vales(tid).get_json() if v["folio"] == folio)), 201
-
-
-# ---------------------------------------------------------------------
-# BAJA
-# ---------------------------------------------------------------------
-@rh_bp.post("/bajas")
-def registrar_baja():
-    """Vuelve a validar adeudos aquí: el frontend se puede saltar, la BD no."""
-    d = request.get_json(silent=True) or {}
-    tid, motivo, fecha = d.get("trabajadorId"), (d.get("motivo") or "").strip(), d.get("fechaBaja")
-    if not tid or not motivo or not fecha:
-        return _error("Faltan datos obligatorios.", 400)
-
-    try:
-        # FOR UPDATE bloquea al trabajador para que nadie le preste algo en este instante
-        t = db.session.execute(text("SELECT id, activo FROM trabajadores WHERE id = :tid FOR UPDATE"),
-                               {"tid": tid}).fetchone()
-        if t is None:
-            db.session.rollback()
-            return _error("El trabajador no existe.", 404)
-        if not t.activo:
-            db.session.rollback()
-            return _error("El trabajador ya estaba dado de baja.", 409)
-
-        pendientes = db.session.execute(SQL_ADEUDOS, {"tid": tid}).fetchall()
-        if pendientes:
-            db.session.rollback()
-            return _error("El trabajador tiene adeudos pendientes.", 409,
-                          adeudos=[_adeudo_json(f) for f in pendientes])
-
-        db.session.execute(text("""
-            UPDATE trabajadores SET activo = FALSE, fecha_baja = :f, motivo_baja = :m, comentarios_baja = :c
-            WHERE id = :tid
-        """), {"f": fecha, "m": motivo, "c": (d.get("comentarios") or "")[:500], "tid": tid})
-        db.session.commit()
-        return jsonify(ok=True, mensaje="Baja registrada correctamente.")
-    except Exception:
-        db.session.rollback()
-        return _error("Error interno al registrar la baja.", 500)
-
-
-# ---------------------------------------------------------------------
-# TABLERO
-# ---------------------------------------------------------------------
-DOCUMENTOS = [
-    ("doc_identificacion", "Identificación oficial"),
-    ("doc_comprobante_dom", "Comprobante de domicilio"),
-    ("doc_datos_bancarios", "Datos bancarios"),
-    ("doc_contrato_firmado", "Contrato firmado"),
-    ("doc_alta_imss", "Alta en el IMSS"),
-]
-
-
-def _dias_desde(fecha):
-    dia = fecha.date() if isinstance(fecha, datetime) else fecha
-    return max(0, (date.today() - dia).days)
-
-
-@rh_bp.get("/resumen")
-def resumen():
-    """GET /api/rh/resumen -> números del tablero de RH (ver ResumenRh en rh.model.ts)."""
-    hace30 = date.today() - timedelta(days=30)
-
-    conteo = db.session.execute(text("""
-        SELECT COALESCE(SUM(activo), 0) AS activos,
-               COALESCE(SUM(NOT activo), 0) AS inactivos,
-               COALESCE(SUM(activo AND fecha_ingreso >= :d), 0) AS altas,
-               COALESCE(SUM(NOT activo AND fecha_baja >= :d), 0) AS bajas
-        FROM trabajadores
-    """), {"d": hace30}).fetchone()
-
-    # Quién debe equipo: misma regla que SQL_ADEUDOS, pero de todos los trabajadores
-    deudas = db.session.execute(text("""
-        SELECT x.trabajador_id, SUM(x.pendiente) AS articulos, MIN(x.fecha_entrega) AS desde
-        FROM (
-            SELECT m.trabajador_id,
-                   SUM(CASE WHEN m.tipo IN ('ENTREGA','REPOSICION') THEN m.cantidad ELSE 0 END)
-                 - SUM(CASE WHEN m.tipo = 'DEVOLUCION' THEN m.cantidad ELSE 0 END) AS pendiente,
-                   MIN(m.fecha) AS fecha_entrega
-            FROM movimientos m
-            JOIN articulos a ON a.id = m.articulo_id
-            WHERE a.tipo <> 'Consumible'
-            GROUP BY m.trabajador_id, m.articulo_id, m.id_serie
-            HAVING pendiente > 0
-        ) x
-        GROUP BY x.trabajador_id
-        ORDER BY desde
-    """)).fetchall()
-    ids = [f.trabajador_id for f in deudas]
-    deudores = {}
-    if ids:
-        filas = db.session.execute(
-            text(SQL_TRABAJADOR + " WHERE id IN :ids").bindparams(bindparam("ids", expanding=True)), {"ids": ids}
-        ).fetchall()
-        deudores = {f.id: _trabajador_json(f) for f in filas}
-    con_adeudos = [
-        {"trabajador": deudores[f.trabajador_id], "articulos": int(f.articulos), "diasMayor": _dias_desde(f.desde)}
-        for f in deudas if f.trabajador_id in deudores
-    ]
-
-    # Expedientes incompletos (solo activos)
-    faltantes = " OR ".join(f"NOT {col}" for col, _ in DOCUMENTOS) + " OR NOT induccion_seguridad"
-    pendientes = []
-    for f in db.session.execute(text(SQL_TRABAJADOR + f" WHERE activo AND ({faltantes}) ORDER BY fecha_ingreso DESC")).fetchall():
-        faltan = [texto for col, texto in DOCUMENTOS if not getattr(f, col)]
-        if not f.induccion_seguridad:
-            faltan.append("Inducción de seguridad")
-        pendientes.append({"trabajador": _trabajador_json(f), "faltan": faltan})
-
-    por_area = [{"area": f.area, "total": f.total} for f in db.session.execute(text("""
-        SELECT area, COUNT(*) AS total FROM trabajadores WHERE activo GROUP BY area ORDER BY total DESC, area
-    """)).fetchall()]
-
-    movimientos = [{
-        "id": f.id, "fecha": _iso(f.fecha), "tipo": f.tipo, "articuloClave": f.clave,
-        "descripcion": f.descripcion, "tipoArticulo": f.tipo_articulo, "idSerie": f.id_serie,
-        "cantidad": f.cantidad, "almacen": f.almacen, "folioVale": f.folio, "responsable": f.responsable,
-        "trabajadorId": f.trabajador_id, "trabajador": f.trabajador,
-    } for f in db.session.execute(text("""
-        SELECT m.id, m.fecha, m.tipo, a.clave, a.descripcion, a.tipo AS tipo_articulo,
-               m.id_serie, m.cantidad, al.nombre AS almacen, v.folio, m.responsable, m.trabajador_id,
-               CONCAT_WS(' ', t.nombres, t.apellido_paterno, t.apellido_materno) AS trabajador
-        FROM movimientos m
-        JOIN articulos a     ON a.id = m.articulo_id
-        JOIN almacenes al    ON al.id = m.almacen_id
-        JOIN trabajadores t  ON t.id = m.trabajador_id
-        LEFT JOIN vales v    ON v.id = m.vale_id
-        ORDER BY m.fecha DESC, m.id DESC
-        LIMIT 8
-    """)).fetchall()]
-
-    altas = [{"trabajador": _trabajador_json(f), "tipo": "alta", "fecha": _iso(f.fecha_ingreso), "detalle": f.puesto}
-             for f in db.session.execute(text(SQL_TRABAJADOR + " WHERE fecha_ingreso <= CURDATE() ORDER BY fecha_ingreso DESC LIMIT 6")).fetchall()]
-    bajas = [{"trabajador": _trabajador_json(f), "tipo": "baja", "fecha": _iso(f.fecha_baja), "detalle": f.motivo_baja or ""}
-             for f in db.session.execute(text(SQL_TRABAJADOR + " WHERE NOT activo AND fecha_baja IS NOT NULL ORDER BY fecha_baja DESC LIMIT 6")).fetchall()]
-    recientes = sorted(altas + bajas, key=lambda r: r["fecha"], reverse=True)[:6]
-
-    return jsonify(
-        activos=int(conteo.activos), inactivos=int(conteo.inactivos),
-        altasMes=int(conteo.altas), bajasMes=int(conteo.bajas),
-        conAdeudos=con_adeudos, pendientes=pendientes, porArea=por_area,
-        movimientos=movimientos, recientes=recientes,
+        raise ErrorNegocio("Puesto no válido.")
+    nss = str(d["nss"]).strip()
+    if not re.fullmatch(r"\d{11}", nss):
+        raise ErrorNegocio("El NSS debe tener 11 dígitos.")
+    if uno("SELECT 1 AS x FROM trabajadores WHERE nss = :n", n=nss):
+        raise ErrorNegocio("Ya existe un trabajador registrado con ese NSS.", 409)
+    tarjeta = limpiar_codigo(d.get("numeroTarjeta"))
+    if tarjeta:
+        _tarjeta_libre(tarjeta)
+    else:
+        while True:  # 8 dígitos que no use nadie
+            tarjeta = str(random.randint(10_000_000, 99_999_999))
+            if not uno("SELECT 1 AS x FROM trabajadores WHERE numero_tarjeta = :t", t=tarjeta):
+                break
+    id_t = ejecutar(
+        """INSERT INTO trabajadores (nombres, apellido_paterno, apellido_materno, nss, telefono, puesto, area, contrato, supervisor,
+               fecha_ingreso, talla_ropa, talla_calzado, numero_tarjeta, compania_contratista, administrador, fecha_emision, foto,
+               reglas_oro, fps_nivel0)
+           VALUES (:nom, :ap, :am, :nss, :tel, :puesto, :area, :contrato, :sup, :ingreso, :ropa, :calzado, :tarjeta, :comp,
+                   :admin, :emision, :foto, :reglas, :fps)""",
+        nom=d["nombres"].strip()[:60], ap=d["apellidoPaterno"].strip()[:40], am=(d.get("apellidoMaterno") or "").strip()[:40] or None,
+        nss=nss, tel=(d.get("telefono") or "").strip()[:20] or None, puesto=d["puesto"], area=d["area"][:60],
+        contrato=d["contrato"][:30], sup=d["supervisor"][:100], ingreso=leer_fecha(d["fechaIngreso"], "Fecha de ingreso"),
+        ropa=d["tallaRopa"][:5], calzado=d["tallaCalzado"][:5], tarjeta=tarjeta, comp=COMPANIA,
+        admin=(d.get("administrador") or "").strip()[:100] or None,
+        emision=leer_fecha(d["fechaEmision"], "Fecha de emisión") if d.get("fechaEmision") else date.today(),
+        foto=_foto(d.get("foto")), reglas=bool(d.get("reglasOro")), fps=bool(d.get("fpsNivel0")),
     )
+    ejecutar("UPDATE trabajadores SET num_empleado = :n WHERE id_trabajador = :id", n=f"IMH-{id_t:05d}", id=id_t)
+    _guardar_cursos(id_t, d.get("cursos"))
+    return jsonify(_trabajador(id_t)), 201
+
+
+@rh_bp.put("/trabajadores/<int:id_t>/credencial")
+@transaccion
+def actualizar_credencial(id_t):
+    d = request.get_json(silent=True) or {}
+    _trabajador(id_t)  # 404 si no existe
+    tarjeta = limpiar_codigo(d.get("numeroTarjeta"))
+    if not tarjeta:
+        raise ErrorNegocio("El número de tarjeta es obligatorio.")
+    _tarjeta_libre(tarjeta, excepto=id_t)
+    ejecutar(
+        """UPDATE trabajadores SET numero_tarjeta = :t, administrador = :a, fecha_emision = :e, foto = :f, reglas_oro = :r, fps_nivel0 = :p
+           WHERE id_trabajador = :id""",
+        t=tarjeta, a=(d.get("administrador") or "").strip()[:100] or None,
+        e=leer_fecha(d["fechaEmision"], "Fecha de emisión") if d.get("fechaEmision") else None,
+        f=_foto(d.get("foto")), r=bool(d.get("reglasOro")), p=bool(d.get("fpsNivel0")), id=id_t,
+    )
+    _guardar_cursos(id_t, d.get("cursos"))
+    return jsonify(_trabajador(id_t))
+
+
+# =====================================================================
+# ADEUDOS, KARDEX Y VALES
+# =====================================================================
+@rh_bp.get("/trabajadores/<int:id_t>/adeudos")
+def adeudos(id_t):
+    return jsonify(_adeudos(id_t))
+
+
+@rh_bp.get("/trabajadores/<int:id_t>/kardex")
+def kardex(id_t):
+    return jsonify([_movimiento_json(m) for m in q(SQL_MOVIMIENTOS + " AND m.id_trabajador = :t ORDER BY m.fecha DESC, m.id_movimiento DESC", t=id_t)])
+
+
+@rh_bp.get("/trabajadores/<int:id_t>/vales")
+@transaccion
+def vales(id_t):
+    trabajador = _trabajador(id_t)
+    cabeceras = q(
+        """SELECT v.id_vale, v.folio, v.tipo, v.fecha, v.observaciones, v.devuelto_en, u.nombre_completo AS responsable
+           FROM vale v JOIN usuario u ON u.id_usuario = v.id_usuario WHERE v.id_trabajador = :t ORDER BY v.fecha DESC""",
+        t=id_t,
+    )
+    renglones = defaultdict(list)
+    if cabeceras:
+        for d in q(
+            """SELECT d.id_vale, d.cantidad, d.estado, d.condicion_devolucion, c.nombre, c.tipo, c.tipo_retorno, i.codigo AS serie
+               FROM vale_detalle d JOIN catalogo c ON c.id_catalogo = d.id_catalogo
+               LEFT JOIN inventario_almacen_individual i ON i.id_invalmind = d.id_invalmind
+               WHERE d.id_vale IN :ids ORDER BY d.id_vale_detalle""",
+            ids=[v.id_vale for v in cabeceras],
+        ):
+            if d.estado:
+                estado = d.estado
+            elif d.tipo_retorno == "Consumible":
+                estado = "Entregado (consumible)"
+            elif d.condicion_devolucion == "dañado":
+                estado = "Devuelto con daño"
+            elif d.condicion_devolucion == "bueno":
+                estado = "Devuelto en buen estado"
+            else:
+                estado = "Pendiente de devolución"
+            renglones[d.id_vale].append({"descripcion": d.nombre, "tipoArticulo": tipo_rh(d.tipo, d.tipo_retorno),
+                                         "idSerie": d.serie, "cantidad": d.cantidad, "estado": estado})
+    return jsonify([
+        {"folio": v.folio, "tipo": v.tipo, "fecha": iso(v.fecha), "trabajador": trabajador, "responsable": v.responsable,
+         "observaciones": v.observaciones or "", "renglones": renglones[v.id_vale]}
+        for v in cabeceras
+    ])
+
+
+@rh_bp.post("/trabajadores/<int:id_t>/vales/adeudos")
+@transaccion
+def vale_adeudos(id_t):
+    """Guarda un vale con lo que el trabajador debe HOY (para firmarlo o anexarlo a la baja)."""
+    trabajador = _trabajador(id_t)
+    pendientes = q("SELECT id_catalogo, id_invalmind, pendiente FROM v_adeudos WHERE id_trabajador = :t", t=id_t)
+    if not pendientes:
+        raise ErrorNegocio("El trabajador no tiene adeudos.", 409)
+    nombre = " ".join(x for x in (trabajador["nombres"], trabajador["apellidoPaterno"], trabajador["apellidoMaterno"]) if x)
+    id_vale = ejecutar(
+        """INSERT INTO vale (folio, tipo, id_trabajador, nombre_trabajador, numero_empleado, id_usuario, observaciones)
+           VALUES (:f, 'ADEUDOS', :t, :n, :num, :u, 'Artículos pendientes de devolución al almacén.')""",
+        f=f"TMP-{random.getrandbits(40)}", t=id_t, n=nombre, num=trabajador["numeroEmpleado"], u=g.usuario.id,
+    )
+    ejecutar("UPDATE vale SET folio = :f WHERE id_vale = :id", f=f"ADE-{id_vale:04d}", id=id_vale)
+    for p in pendientes:
+        ejecutar(
+            "INSERT INTO vale_detalle (id_vale, id_catalogo, id_invalmind, cantidad, estado) VALUES (:v, :c, :p, :n, 'Pendiente de devolución')",
+            v=id_vale, c=p.id_catalogo, p=p.id_invalmind, n=int(p.pendiente),
+        )
+    return jsonify(next(v for v in vales(id_t).get_json() if v["folio"] == f"ADE-{id_vale:04d}")), 201
+
+
+# =====================================================================
+# BAJA
+# =====================================================================
+@rh_bp.post("/bajas")
+@transaccion
+def dar_de_baja():
+    d = request.get_json(silent=True) or {}
+    id_t = int(d.get("trabajadorId") or 0)
+    trabajador = _trabajador(id_t)
+    if not trabajador["activo"]:
+        raise ErrorNegocio("El trabajador ya está dado de baja.", 409)
+    motivo = str(d.get("motivo") or "").strip()[:60]
+    if not motivo:
+        raise ErrorNegocio("Indica el motivo de la baja.")
+    pendientes = _adeudos(id_t)
+    if pendientes:
+        # El almacén le prestó equipo que no ha regresado: no se puede dar de baja
+        raise ErrorNegocio("El trabajador tiene adeudos pendientes.", 409, adeudos=pendientes)
+    ejecutar(
+        "UPDATE trabajadores SET activo = FALSE, fecha_baja = :f, motivo_baja = :m, comentarios_baja = :c WHERE id_trabajador = :id",
+        f=leer_fecha(d.get("fechaBaja"), "Fecha de baja"), m=motivo, c=str(d.get("comentarios") or "").strip()[:500] or None, id=id_t,
+    )
+    return jsonify(ok=True, mensaje="Baja registrada correctamente.")

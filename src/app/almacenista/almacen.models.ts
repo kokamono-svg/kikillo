@@ -24,6 +24,7 @@ export interface Pieza {
   estado: EstadoPieza;
   ultimaInspeccion: string; // fecha AAAA-MM-DD
   prestada: boolean; // true = ya la tiene alguien
+  certificacionVence?: string; // AAAA-MM-DD; solo en equipo que requiere certificación (arnés, detector...)
 }
 
 /** Un artículo del catálogo del almacén. */
@@ -37,6 +38,7 @@ export interface Articulo {
   costoso?: boolean; // equipo de alto valor: al devolverlo se sugiere revisar y dejar notas o fotos
   danados?: number; // unidades devueltas con daño (solo por cantidad): no se pueden prestar
   cursoRequerido?: string; // clave del curso que debe tener vigente quien lo pide (ej. ALTURAS)
+  requiereCertificacion?: boolean; // cada pieza tiene fecha de vencimiento: vencida = no se presta
 }
 
 /** Cómo regresó el equipo. */
@@ -118,6 +120,8 @@ export interface EntradaArticulo {
   costoso: boolean;
   series: string[]; // números de serie (herramienta y EPP)
   cursoRequerido?: string; // curso que debe tener vigente quien lo pida
+  requiereCertificacion?: boolean; // solo para artículo nuevo
+  certificacionVence?: string; // fecha de vencimiento de las piezas que entran (si requiere certificación)
   cantidad: number; // unidades (solo consumibles)
 }
 
@@ -127,4 +131,15 @@ export interface Etiqueta {
   nombre: string;
   detalle: string; // "Serie" o "Código · consumible"
   almacen: string;
+}
+
+/** Equipo que se movió de un almacén a otro (folio T-0001). */
+export interface Traspaso {
+  folio: string;
+  fecha: string;
+  origen: string;
+  destino: string;
+  usuario: string;
+  notas: string;
+  lineas: { codigo: string; nombre: string; serie: string | null; cantidad: number }[];
 }

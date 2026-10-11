@@ -6,7 +6,7 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { AccesoAlmacen } from '../acceso-almacen.service';
-import { AlmacenService } from '../almacen.service';
+import { AlmacenService, diasParaVencer, estadoCertificacion } from '../almacen.service';
 import { Pieza, TipoArticulo } from '../almacen.models';
 import { CLASE_TIPO } from '../estado-prestamo';
 import { contieneCodigo } from '../../compartido/codigos';
@@ -25,10 +25,12 @@ interface Renglon {
   porAlmacen: { almacen: string; disponibles: number; bajo: boolean }[];
   piezas: Pieza[];
 }
+import { BotonEscanerComponent } from '../../compartido/escaner/boton-escaner.component';
+import { LectorDirective } from '../../compartido/escaner/lector.directive';
 
 @Component({
   selector: 'app-almacen-inventario',
-  imports: [RouterLink],
+  imports: [RouterLink, BotonEscanerComponent, LectorDirective],
   templateUrl: './inventario.component.html',
 })
 export class InventarioComponent {
@@ -98,13 +100,20 @@ export class InventarioComponent {
   }
 
   clasePieza(p: Pieza): string {
+    const cert = estadoCertificacion(p);
+    if (cert === 'vencida' && p.estado !== 'no apto') return 'border-red-300 bg-red-50 text-red-700 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-300';
+    if (cert === 'por-vencer' && !p.prestada && p.estado !== 'no apto') return 'border-orange-300 bg-orange-50 text-orange-800 dark:border-orange-500/40 dark:bg-orange-500/10 dark:text-orange-300';
     if (p.estado === 'no apto') return 'border-orange-300 bg-orange-50 text-orange-700 line-through dark:border-orange-500/40 dark:bg-orange-500/10 dark:text-orange-300';
     if (p.prestada) return 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-300';
     return 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300';
   }
 
   textoPieza(p: Pieza): string {
-    return p.estado === 'no apto' ? 'No apta' : p.prestada ? 'Prestada' : 'Disponible';
+    const base = p.estado === 'no apto' ? 'No apta' : p.prestada ? 'Prestada' : 'Disponible';
+    const cert = estadoCertificacion(p);
+    if (cert === 'no-aplica') return base;
+    const dias = diasParaVencer(p);
+    return `${base} · certificación ${cert === 'vencida' ? 'VENCIDA el' : 'vence el'} ${p.certificacionVence}${cert === 'por-vencer' ? ` (${dias} días)` : ''}`;
   }
 
   /** Nombre corto del almacén para las etiquetas ("Área Midrex" → "Midrex"). */

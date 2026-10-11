@@ -103,6 +103,8 @@
                 <!-- Un solo campo: la pistola escribe aquí y manda Enter (recibe el foco tras cada lectura) -->
                 <input
                   #inputEscaner
+                  appLector
+                  (lector)="leerCodigo($event)"
                   type="text"
                   inputmode="text"
                   autocomplete="off"
@@ -114,6 +116,7 @@
                   (keydown.enter)="$event.preventDefault(); escanear()"
                   class="h-11 min-w-0 flex-1 rounded-xl border border-blue-200 bg-white px-3 font-mono text-base uppercase outline-none placeholder:normal-case focus:border-blue-500 focus:ring-4 focus:ring-blue-500/15 sm:text-sm dark:border-white/10 dark:bg-neutral-900"
                 />
+                <app-boton-escaner titulo="Escanea las etiquetas del equipo" [continuo]="true" [aviso]="aviso()" (leido)="leerCodigo($event, false)" />
                 <button
                   type="button"
                   (click)="escanear()"
@@ -181,19 +184,26 @@
                     @if (libres.length) {
                       <div class="mt-2 flex flex-wrap gap-1.5">
                         @for (p of libres.slice(0, 6); track p.serie) {
+                          @let porVencer = estadoCertificacion(p) === 'por-vencer';
                           <button
                             type="button"
                             (click)="agregar(a, p.serie)"
-                            [title]="'Última inspección: ' + p.ultimaInspeccion"
-                            class="rounded-lg border border-gray-200 px-2 py-1 font-mono text-xs transition hover:border-blue-500 hover:bg-blue-50 dark:border-white/10 dark:hover:bg-blue-500/10"
+                            [title]="p.certificacionVence ? 'Certificación vence ' + p.certificacionVence : 'Última inspección: ' + p.ultimaInspeccion"
+                            class="rounded-lg border px-2 py-1 font-mono text-xs transition hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-500/10"
+                            [class]="porVencer ? 'border-orange-300 bg-orange-50 text-orange-800 dark:border-orange-500/40 dark:bg-orange-500/10 dark:text-orange-300' : 'border-gray-200 dark:border-white/10'"
                           >
-                            {{ p.serie }}
+                            {{ p.serie }}{{ porVencer ? ' ⚠ ' + diasParaVencer(p) + 'd' : '' }}
                           </button>
                         }
                         @if (libres.length > 6) {
                           <span class="self-center text-xs text-gray-400">+{{ libres.length - 6 }} más · escanea su etiqueta</span>
                         }
                       </div>
+                    }
+                    @if (certificacionesVencidas(a); as vencidas) {
+                      <p class="mt-2 text-xs font-medium text-red-600 dark:text-red-400">
+                        {{ vencidas }} {{ vencidas === 1 ? 'pieza' : 'piezas' }} con certificación vencida: no se prestan.
+                      </p>
                     }
                   } @else {
                     <div class="mt-3 flex items-center justify-between gap-3">
@@ -298,16 +308,18 @@
           </div>
 
           <!-- Gafete (opcional): la pistola lee el QR o código de barras y se llenan los datos de RH -->
-          <div class="rounded-2xl border-2 border-dashed border-violet-200 bg-violet-50/50 p-4 sm:p-5 dark:border-violet-500/30 dark:bg-violet-500/5">
+          <div class="rounded-2xl border-2 border-dashed border-blue-200 bg-blue-50/50 p-4 sm:p-5 dark:border-blue-500/30 dark:bg-blue-500/5">
             <div class="flex items-center gap-2">
-              <svg class="size-5 text-violet-600 dark:text-violet-300" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M15 9h3.75M15 12h3.75M15 15h3.75M4.5 19.5h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5zm6-10.125a1.875 1.875 0 11-3.75 0 1.875 1.875 0 013.75 0zm1.294 6.336a6.721 6.721 0 01-3.17.789 6.721 6.721 0 01-3.168-.789 3.376 3.376 0 016.338 0z" /></svg>
-              <span class="text-sm font-semibold text-violet-900 dark:text-violet-200">Escanear credencial</span>
-              <span class="rounded-full bg-violet-100 px-2 py-0.5 text-[11px] font-medium text-violet-700 dark:bg-violet-500/15 dark:text-violet-300">Recomendado</span>
+              <svg class="size-5 text-blue-600 dark:text-blue-300" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M15 9h3.75M15 12h3.75M15 15h3.75M4.5 19.5h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5zm6-10.125a1.875 1.875 0 11-3.75 0 1.875 1.875 0 013.75 0zm1.294 6.336a6.721 6.721 0 01-3.17.789 6.721 6.721 0 01-3.168-.789 3.376 3.376 0 016.338 0z" /></svg>
+              <span class="text-sm font-semibold text-blue-900 dark:text-blue-200">Escanear credencial</span>
+              <span class="rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-medium text-blue-700 dark:bg-blue-500/15 dark:text-blue-300">Recomendado</span>
             </div>
-            <p class="mt-1 text-xs text-violet-800/80 dark:text-violet-300/80">El QR guarda el N° de tarjeta. Sin credencial no se puede prestar equipo que pida curso.</p>
+            <p class="mt-1 text-xs text-blue-800/80 dark:text-blue-300/80">El QR guarda el N° de tarjeta. Sin credencial no se puede prestar equipo que pida curso.</p>
             <div class="mt-3 flex gap-2">
               <input
                 #inputGafete
+                appLector
+                (lector)="leerGafete($event)"
                 type="text"
                 autocomplete="off"
                 spellcheck="false"
@@ -317,7 +329,8 @@
                 (keydown.enter)="$event.preventDefault(); leerGafete()"
                 class="campo min-w-0 flex-1 font-mono"
               />
-              <button type="button" (click)="leerGafete()" [disabled]="!textoGafete().trim() || leyendoGafete()" class="h-11 shrink-0 rounded-xl bg-violet-600 px-4 text-sm font-semibold text-white hover:bg-violet-700 disabled:bg-gray-300">
+              <app-boton-escaner titulo="Escanea la credencial del trabajador" (leido)="leerGafete($event)" />
+              <button type="button" (click)="leerGafete()" [disabled]="!textoGafete().trim() || leyendoGafete()" class="h-11 shrink-0 rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white hover:bg-blue-700 disabled:bg-gray-300">
                 {{ leyendoGafete() ? 'Buscando…' : 'Buscar' }}
               </button>
             </div>
@@ -358,7 +371,7 @@
                       <span class="rounded-full bg-orange-50 px-2 py-0.5 font-medium text-orange-700 dark:bg-orange-500/10 dark:text-orange-300">Sin inducción de seguridad</span>
                     }
                     @if (g.adeudos.length) {
-                      <span class="rounded-full bg-amber-50 px-2 py-0.5 font-medium text-amber-700 dark:bg-amber-500/10 dark:text-amber-300" [title]="'Debe: ' + g.adeudos.map((a) => a.descripcion).join(', ')">
+                      <span class="rounded-full bg-orange-50 px-2 py-0.5 font-medium text-orange-700 dark:bg-orange-500/10 dark:text-orange-300" [title]="'Debe: ' + g.adeudos.map((a) => a.descripcion).join(', ')">
                         Debe {{ g.adeudos.length }} artículo{{ g.adeudos.length === 1 ? '' : 's' }}
                       </span>
                     }
@@ -542,12 +555,13 @@
         <button
           type="button"
           (click)="siguiente()"
-          class="h-12 flex-1 rounded-xl text-sm font-semibold text-white shadow-lg transition sm:flex-none sm:px-8"
+          [disabled]="guardando()"
+          class="h-12 flex-1 rounded-xl text-sm font-semibold text-white shadow-lg transition disabled:cursor-wait disabled:opacity-70 sm:flex-none sm:px-8"
           [class]="
             falta() ? 'bg-gray-400 shadow-none' : 'bg-blue-600 shadow-blue-600/25 hover:bg-blue-700'
           "
         >
-          {{ paso() === 3 ? 'Generar vale' : 'Continuar' }}
+          {{ guardando() ? 'Guardando…' : paso() === 3 ? 'Generar vale' : 'Continuar' }}
         </button>
       </div>
     </div>

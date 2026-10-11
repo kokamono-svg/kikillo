@@ -62,13 +62,18 @@
         </div>
 
         @if (eleccion() === null) {
-          <input
-            type="search"
-            placeholder="Busca si ya existe: nombre o código"
-            [value]="busqueda()"
-            (input)="busqueda.set(valor($event))"
-            class="campo-agregar mt-3"
-          />
+          <div class="mt-3 flex gap-2">
+            <input
+              appLector
+              (lector)="busqueda.set($event)"
+              type="search"
+              placeholder="Busca si ya existe: nombre o código"
+              [value]="busqueda()"
+              (input)="busqueda.set(valor($event))"
+              class="campo-agregar min-w-0 flex-1"
+            />
+            <app-boton-escaner titulo="Escanea la etiqueta del artículo" (leido)="busqueda.set($event)" />
+          </div>
           <ul class="mt-3 max-h-72 divide-y divide-gray-100 overflow-y-auto rounded-xl border border-gray-200 dark:divide-white/10 dark:border-white/10">
             @for (a of encontrados(); track a.codigo) {
               <li>
@@ -135,9 +140,13 @@
                 <input type="number" min="1" [value]="limite()" (input)="limite.set(numero($event))" class="campo-agregar" />
               </label>
               @if (tipo() !== 'Consumible') {
-                <label class="flex h-11 cursor-pointer items-center gap-2.5 rounded-xl border border-gray-200 px-3 text-sm text-gray-700 has-[:checked]:border-violet-400 has-[:checked]:bg-violet-50 dark:border-white/10 dark:text-gray-300 dark:has-[:checked]:bg-violet-500/10">
-                  <input type="checkbox" [checked]="costoso()" (change)="costoso.set(!costoso())" class="size-4 accent-violet-600" />
+                <label class="flex h-11 cursor-pointer items-center gap-2.5 rounded-xl border border-gray-200 px-3 text-sm text-gray-700 has-[:checked]:border-blue-400 has-[:checked]:bg-blue-50 dark:border-white/10 dark:text-gray-300 dark:has-[:checked]:bg-blue-500/10">
+                  <input type="checkbox" [checked]="costoso()" (change)="costoso.set(!costoso())" class="size-4 accent-blue-600" />
                   Equipo de alto valor
+                </label>
+                <label class="flex h-11 cursor-pointer items-center gap-2.5 rounded-xl border border-gray-200 px-3 text-sm text-gray-700 has-[:checked]:border-orange-400 has-[:checked]:bg-orange-50 dark:border-white/10 dark:text-gray-300 dark:has-[:checked]:bg-orange-500/10">
+                  <input type="checkbox" [checked]="requiereCertificacion()" (change)="requiereCertificacion.set(!requiereCertificacion())" class="size-4 accent-orange-600" />
+                  Requiere certificación
                 </label>
                 <label class="block min-w-56 flex-1">
                   <span class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">Curso requerido para prestarlo</span>
@@ -164,10 +173,19 @@
           <input type="number" min="1" [value]="cantidad()" (input)="cantidad.set(numero($event))" class="campo-agregar mt-3 max-w-40 text-lg font-semibold" />
         } @else {
           <h2 class="text-base font-semibold text-gray-900 dark:text-white">2 · Números de serie</h2>
+          @if (pideCertificacion()) {
+            <label class="mt-3 block rounded-xl border border-orange-200 bg-orange-50 p-3 dark:border-orange-500/30 dark:bg-orange-500/10">
+              <span class="mb-1.5 block text-sm font-medium text-orange-900 dark:text-orange-200">La certificación de estas piezas vence el</span>
+              <input type="date" [min]="hoy()" [value]="certificacionVence()" (input)="certificacionVence.set(valor($event))" class="campo-agregar max-w-56" />
+              <span class="mt-1.5 block text-xs text-orange-800/80 dark:text-orange-300/80">Se avisa 30 días antes; ya vencida, la pieza no se presta. Cada pieza se puede recertificar en "Certificaciones".</span>
+            </label>
+          }
           <p class="mt-0.5 text-sm text-gray-500 dark:text-gray-400">Una serie por pieza. Escanéala o escríbela y presiona Enter.</p>
 
           <div class="mt-3 flex gap-2">
             <input
+              appLector
+              (lector)="leerSerie($event)"
               type="text"
               autocomplete="off"
               autocapitalize="characters"
@@ -179,6 +197,7 @@
               class="campo-agregar min-w-0 flex-1 font-mono uppercase placeholder:normal-case"
               [class.campo-error]="!!errorSerie()"
             />
+            <app-boton-escaner titulo="Escanea las series de las piezas" [continuo]="true" [aviso]="avisoSerie()" (leido)="leerSerie($event)" />
             <button type="button" (click)="agregarSerie()" [disabled]="!serieEscrita().trim() || !!errorSerie()" class="h-11 shrink-0 rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white hover:bg-blue-700 disabled:bg-gray-300">Agregar</button>
           </div>
           @if (errorSerie()) {

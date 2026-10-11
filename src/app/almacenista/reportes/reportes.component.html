@@ -1,0 +1,162 @@
+<!-- =====================================================
+     REPORTES de herramienta: existencias, movimientos y adeudos
+====================================================== -->
+<div class="space-y-5">
+  <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+    <div>
+      <h1 class="text-2xl font-bold tracking-tight text-gray-900 sm:text-3xl dark:text-white">Reportes</h1>
+      <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{{ titulo() }} · generado {{ hasta() | date: 'dd/MM/yyyy' }}</p>
+    </div>
+    <div class="flex gap-2 print:hidden">
+      <button type="button" (click)="descargarCsv()" class="inline-flex h-10 items-center gap-2 rounded-xl bg-emerald-600 px-4 text-sm font-semibold text-white hover:bg-emerald-700">
+        <svg class="size-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" /></svg>
+        Excel (CSV)
+      </button>
+      <button type="button" (click)="imprimir()" class="h-10 rounded-xl border border-gray-300 bg-white px-4 text-sm font-semibold text-gray-700 hover:bg-gray-50 dark:border-white/15 dark:bg-neutral-900 dark:text-gray-200">Imprimir</button>
+    </div>
+  </div>
+
+  <!-- Pestañas -->
+  <div class="sin-barra flex gap-2 overflow-x-auto print:hidden">
+    @for (p of [['existencias', 'Existencias'], ['movimientos', 'Movimientos'], ['adeudos', 'Adeudos']]; track p[0]) {
+      <button
+        type="button"
+        (click)="pestana.set($any(p[0])); soloAlerta.set(false); filtro.set('')"
+        class="h-10 shrink-0 rounded-full px-5 text-sm font-semibold transition"
+        [class]="pestana() === p[0] ? 'bg-neutral-900 text-white dark:bg-white dark:text-neutral-900' : 'bg-white text-gray-600 ring-1 ring-gray-200 hover:bg-gray-50 dark:bg-white/5 dark:text-gray-300 dark:ring-white/10'"
+      >
+        {{ p[1] }}
+      </button>
+    }
+  </div>
+
+  <!-- Filtros -->
+  <div class="flex flex-wrap items-end gap-3 print:hidden">
+    <input type="search" placeholder="Filtrar: artículo, serie, trabajador, folio…" [value]="filtro()" (input)="filtro.set(valor($event))" class="h-10 min-w-56 flex-1 rounded-xl border border-gray-200 bg-white px-3 text-base outline-none focus:border-blue-500 sm:max-w-sm sm:text-sm dark:border-white/10 dark:bg-neutral-900 dark:text-white" />
+    @if (pestana() === 'movimientos') {
+      <label class="text-xs text-gray-500">Desde<input type="date" [value]="desde()" (change)="desde.set(valor($event))" class="mt-1 block h-10 rounded-xl border border-gray-200 bg-white px-3 text-sm dark:border-white/10 dark:bg-neutral-900 dark:text-white" /></label>
+      <label class="text-xs text-gray-500">Hasta<input type="date" [value]="hasta()" (change)="hasta.set(valor($event))" class="mt-1 block h-10 rounded-xl border border-gray-200 bg-white px-3 text-sm dark:border-white/10 dark:bg-neutral-900 dark:text-white" /></label>
+      <label class="text-xs text-gray-500">Tipo
+        <select [value]="tipo()" (change)="tipo.set(valor($event))" class="mt-1 block h-10 rounded-xl border border-gray-200 bg-white px-3 text-sm dark:border-white/10 dark:bg-neutral-900 dark:text-white">
+          <option value="">Todos</option>
+          @for (t of tiposMovimiento; track t) {
+            <option [value]="t">{{ textoMovimiento[t] }}</option>
+          }
+        </select>
+      </label>
+    } @else {
+      <label class="flex h-10 cursor-pointer items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 text-sm text-gray-700 has-[:checked]:border-orange-300 has-[:checked]:bg-orange-50 dark:border-white/10 dark:bg-neutral-900 dark:text-gray-300">
+        <input type="checkbox" [checked]="soloAlerta()" (change)="soloAlerta.set(!soloAlerta())" class="size-4 accent-orange-500" />
+        {{ pestana() === 'adeudos' ? 'Solo vencidos' : 'Solo con alerta (stock bajo, no aptas, certificación)' }}
+      </label>
+    }
+  </div>
+
+  @if (error()) {
+    <p role="alert" class="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700 ring-1 ring-red-200">{{ error() }}</p>
+  }
+
+  <section class="overflow-hidden rounded-2xl border border-gray-200 bg-white dark:border-white/10 dark:bg-neutral-900" [class.opacity-60]="cargando()">
+    <div class="overflow-x-auto">
+      @switch (pestana()) {
+        @case ('existencias') {
+          <table class="w-full min-w-[760px] text-left text-sm">
+            <thead class="bg-gray-50 text-xs tracking-wide text-gray-500 uppercase dark:bg-white/5 dark:text-gray-400">
+              <tr>
+                @if (varios()) { <th class="px-4 py-3">Almacén</th> }
+                <th class="px-4 py-3">Artículo</th><th class="px-4 py-3">Tipo</th>
+                <th class="px-4 py-3 text-right">Disp.</th><th class="px-4 py-3 text-right">Prest.</th><th class="px-4 py-3 text-right">No aptas</th>
+                <th class="px-4 py-3 text-right">Total</th><th class="px-4 py-3">Alertas</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100 dark:divide-white/10">
+              @for (f of existenciasVisibles(); track f.almacen + f.clave) {
+                <tr>
+                  @if (varios()) { <td class="px-4 py-2.5 text-gray-600 dark:text-gray-400">{{ corto(f.almacen) }}</td> }
+                  <td class="px-4 py-2.5"><p class="font-medium text-gray-900 dark:text-white">{{ f.nombre }}</p><p class="font-mono text-xs text-gray-500">{{ f.clave }}</p></td>
+                  <td class="px-4 py-2.5 text-gray-600 dark:text-gray-400">{{ f.tipo }}</td>
+                  <td class="px-4 py-2.5 text-right font-semibold" [class]="f.stockBajo ? 'text-orange-600' : 'text-emerald-600'">{{ f.disponibles }}</td>
+                  <td class="px-4 py-2.5 text-right text-blue-700 dark:text-blue-300">{{ f.prestadas }}</td>
+                  <td class="px-4 py-2.5 text-right" [class]="f.noAptas ? 'text-orange-600' : 'text-gray-400'">{{ f.noAptas }}</td>
+                  <td class="px-4 py-2.5 text-right font-semibold text-gray-900 dark:text-white">{{ f.total }}</td>
+                  <td class="px-4 py-2.5">
+                    <div class="flex flex-wrap gap-1 text-[11px] font-medium">
+                      @if (f.stockBajo) { <span class="rounded-full bg-orange-50 px-2 py-0.5 text-orange-700">Stock bajo</span> }
+                      @if (f.certVencidas) { <span class="rounded-full bg-red-50 px-2 py-0.5 text-red-700">{{ f.certVencidas }} cert. vencida(s)</span> }
+                      @if (f.certPorVencer) { <span class="rounded-full bg-orange-50 px-2 py-0.5 text-orange-700">{{ f.certPorVencer }} por vencer</span> }
+                    </div>
+                  </td>
+                </tr>
+              } @empty {
+                <tr><td colspan="8" class="px-4 py-10 text-center text-gray-400">{{ cargando() ? 'Cargando…' : 'Sin datos.' }}</td></tr>
+              }
+            </tbody>
+            @if (existenciasVisibles().length) {
+              <tfoot class="border-t-2 border-gray-200 bg-gray-50 font-semibold dark:border-white/10 dark:bg-white/5 dark:text-white">
+                <tr>
+                  <td class="px-4 py-3" [attr.colspan]="varios() ? 3 : 2">Total ({{ existenciasVisibles().length }} renglones)</td>
+                  <td class="px-4 py-3 text-right">{{ totalExistencias().disponibles }}</td><td class="px-4 py-3 text-right">{{ totalExistencias().prestadas }}</td>
+                  <td class="px-4 py-3 text-right">{{ totalExistencias().noAptas }}</td><td class="px-4 py-3 text-right">{{ totalExistencias().total }}</td><td></td>
+                </tr>
+              </tfoot>
+            }
+          </table>
+        }
+        @case ('movimientos') {
+          <table class="w-full min-w-[900px] text-left text-sm">
+            <thead class="bg-gray-50 text-xs tracking-wide text-gray-500 uppercase dark:bg-white/5 dark:text-gray-400">
+              <tr><th class="px-4 py-3">Fecha</th><th class="px-4 py-3">Tipo</th>@if (varios()) { <th class="px-4 py-3">Almacén</th> }<th class="px-4 py-3">Artículo</th><th class="px-4 py-3 text-right">Cant.</th><th class="px-4 py-3">Trabajador / Folio</th><th class="px-4 py-3">Responsable</th></tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100 dark:divide-white/10">
+              @for (f of movimientosVisibles(); track f.id) {
+                <tr>
+                  <td class="px-4 py-2.5 whitespace-nowrap text-gray-600 dark:text-gray-400">{{ f.fecha | date: 'dd/MM/yy HH:mm' }}</td>
+                  <td class="px-4 py-2.5"><span class="rounded-full px-2 py-0.5 text-xs font-medium"
+                    [class]="f.tipo === 'ENTREGA' ? 'bg-blue-50 text-blue-700' : f.tipo === 'DEVOLUCION' || f.tipo === 'ENTRADA' ? 'bg-emerald-50 text-emerald-700' : f.tipo === 'DANO' || f.tipo === 'PERDIDA' ? 'bg-red-50 text-red-700' : 'bg-blue-50 text-blue-700'">{{ textoMovimiento[f.tipo] }}</span></td>
+                  @if (varios()) { <td class="px-4 py-2.5 text-gray-600 dark:text-gray-400">{{ corto(f.almacen) }}</td> }
+                  <td class="px-4 py-2.5"><p class="font-medium text-gray-900 dark:text-white">{{ f.nombre }}</p><p class="font-mono text-xs text-gray-500">{{ f.serie ?? f.clave }}</p></td>
+                  <td class="px-4 py-2.5 text-right font-semibold text-gray-900 dark:text-white">{{ f.cantidad }}</td>
+                  <td class="px-4 py-2.5"><p class="text-gray-800 dark:text-gray-200">{{ f.trabajador || '—' }}</p><p class="font-mono text-xs text-gray-500">{{ f.folio }}</p></td>
+                  <td class="px-4 py-2.5 text-gray-600 dark:text-gray-400">{{ f.responsable }}</td>
+                </tr>
+              } @empty {
+                <tr><td colspan="7" class="px-4 py-10 text-center text-gray-400">{{ cargando() ? 'Cargando…' : 'Sin movimientos en ese periodo.' }}</td></tr>
+              }
+            </tbody>
+          </table>
+        }
+        @case ('adeudos') {
+          <table class="w-full min-w-[860px] text-left text-sm">
+            <thead class="bg-gray-50 text-xs tracking-wide text-gray-500 uppercase dark:bg-white/5 dark:text-gray-400">
+              <tr><th class="px-4 py-3">Trabajador</th><th class="px-4 py-3">Artículo</th>@if (varios()) { <th class="px-4 py-3">Almacén</th> }<th class="px-4 py-3">Vale</th><th class="px-4 py-3">Devolver el</th><th class="px-4 py-3 text-right">Días</th></tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100 dark:divide-white/10">
+              @for (f of adeudosVisibles(); track f.folio + (f.serie ?? f.clave)) {
+                <tr [class.bg-red-50/40]="f.vencido">
+                  <td class="px-4 py-2.5">
+                    <p class="font-medium text-gray-900 dark:text-white">{{ f.trabajador }}</p>
+                    <p class="text-xs text-gray-500">{{ f.numeroEmpleado || 'Sin número' }}{{ !f.enRh ? ' · no está en RH' : !f.activo ? ' · dado de baja' : '' }}</p>
+                  </td>
+                  <td class="px-4 py-2.5"><p class="text-gray-800 dark:text-gray-200">{{ f.nombre }}</p><p class="font-mono text-xs text-gray-500">{{ f.serie ?? f.clave }}{{ f.cantidad > 1 ? ' × ' + f.cantidad : '' }}</p></td>
+                  @if (varios()) { <td class="px-4 py-2.5 text-gray-600 dark:text-gray-400">{{ corto(f.almacen) }}</td> }
+                  <td class="px-4 py-2.5 font-mono text-xs text-gray-600 dark:text-gray-400">{{ f.folio }}</td>
+                  <td class="px-4 py-2.5">
+                    <span [class]="f.vencido ? 'font-semibold text-red-600' : 'text-gray-700 dark:text-gray-300'">{{ f.fechaDevolucion | date: 'dd/MM/yyyy' }}</span>
+                    @if (f.vencido) { <span class="ml-1 rounded-full bg-red-50 px-1.5 py-0.5 text-[11px] font-semibold text-red-700">vencido {{ f.diasVencido }} d</span> }
+                  </td>
+                  <td class="px-4 py-2.5 text-right text-gray-700 dark:text-gray-300">{{ f.diasPrestado }}</td>
+                </tr>
+              } @empty {
+                <tr><td colspan="6" class="px-4 py-10 text-center text-gray-400">{{ cargando() ? 'Cargando…' : 'Nadie debe equipo.' }}</td></tr>
+              }
+            </tbody>
+          </table>
+        }
+      }
+    </div>
+  </section>
+
+  @if (pestana() === 'adeudos' && adeudosVisibles().length) {
+    <p class="text-sm text-gray-600 dark:text-gray-400">{{ adeudosVisibles().length }} pieza(s) sin devolver · <span class="font-semibold text-red-600">{{ vencidos() }} vencida(s)</span></p>
+  }
+</div>
