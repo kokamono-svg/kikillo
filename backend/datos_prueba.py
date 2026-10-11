@@ -88,6 +88,7 @@ USUARIOS = [
     ("Oscar Salas", "almacen", "Almacen#2026", "almacenista", "Central Kepler", None),
     ("Laura Ríos", "almacen.mittal", "Almacen#2026", "almacenista", "Colonia de Contratistas (Mittal)", None),
     ("Compras", "compras", "Compras#2026", "comprador", None, None),
+    ("Supervisor de turno", "supervisor", "Supervisor#2026", "supervisor", None, None),
     ("Juan Pérez García", "12345678901", "Trabajador#2026", "solicitante", None, 1),
 ]
 

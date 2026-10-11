@@ -3,7 +3,7 @@
 # Crea la BD Inventarios con inventarios.sql y (opcional) le carga los
 # datos de prueba de datos_prueba.py. Usa los datos de .env.
 #
-#   python crear_bd.py                 -> crea lo que falte (no borra nada)
+#   python crear_bd.py                 -> crea lo que falte y aplica migraciones.sql (no borra nada)
 #   python crear_bd.py --datos         -> además carga los datos de ejemplo
 #   python crear_bd.py --reiniciar     -> BORRA la BD completa y la crea de nuevo con los datos de ejemplo
 # =====================================================================
@@ -50,6 +50,7 @@ def main():
         print(f"  BD {nombre} borrada")
 
     ejecutar(cur, "inventarios.sql")
+    ejecutar(cur, "migraciones.sql")  # BDs creadas con una versión anterior
     if "--datos" in sys.argv or "--reiniciar" in sys.argv:
         cur.execute(f"USE `{nombre}`")
         datos_prueba.cargar(cur)

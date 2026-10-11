@@ -86,7 +86,7 @@ function mensajeDe(e: unknown): string {
 }
 
 /** Roles que usan el almacén (los demás no cargan sus datos). */
-const ROLES_ALMACEN = ['admin', 'almacenista', 'comprador'];
+const ROLES_ALMACEN = ['admin', 'almacenista', 'comprador', 'supervisor'];
 
 @Injectable({ providedIn: 'root' })
 export class AlmacenService {
@@ -347,6 +347,32 @@ export class AlmacenService {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(vence) || vence < dentroDe(0)) return 'La nueva fecha de vencimiento debe ser hoy o después.';
     try {
       await firstValueFrom(this.http.post(`${this.api}/certificaciones`, { almacen, serie, vence }));
+      await this.cargar();
+      return '';
+    } catch (e) {
+      return mensajeDe(e);
+    }
+  }
+
+  /* =====================================================
+     ESTADO DE PIEZAS Y AJUSTE DE STOCK (avisan a Telegram)
+  ===================================================== */
+
+  /** Manda una pieza a mantenimiento, reparación, dañada o de vuelta a disponible. '' = listo. */
+  async cambiarEstadoPieza(almacen: string, serie: string, estatus: string, notas: string): Promise<string> {
+    try {
+      await firstValueFrom(this.http.post(`${this.api}/piezas/estado`, { almacen, serie, estatus, notas }));
+      await this.cargar();
+      return '';
+    } catch (e) {
+      return mensajeDe(e);
+    }
+  }
+
+  /** Conteo físico de un artículo por cantidad: deja el stock en "cantidad". '' = listo. */
+  async ajustarStock(almacen: string, codigo: string, cantidad: number, notas: string): Promise<string> {
+    try {
+      await firstValueFrom(this.http.post(`${this.api}/stock`, { almacen, codigo, cantidad, notas }));
       await this.cargar();
       return '';
     } catch (e) {

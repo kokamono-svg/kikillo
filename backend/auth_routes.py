@@ -29,7 +29,7 @@ from extensions import db
 auth_bp = Blueprint("auth", __name__, url_prefix="/api/auth")
 
 DURACION_SESION = 8 * 60 * 60  # segundos: una jornada
-ROLES = {"admin", "rh", "almacenista", "comprador", "solicitante"}
+ROLES = {"admin", "rh", "almacenista", "comprador", "supervisor", "solicitante"}
 
 # Se compara contra este hash cuando el usuario no existe, para que la
 # respuesta tarde lo mismo y no se pueda adivinar qué usuarios existen.

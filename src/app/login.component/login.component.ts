@@ -2,10 +2,11 @@ import { Component, inject, signal } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import { Router } from '@angular/router';
 import { AuthService } from '../auth/auth.service';
+import { BotonInstalarComponent } from '../compartido/pwa/boton-instalar.component';
 
 @Component({
   selector: 'login.component',
-  imports: [],
+  imports: [BotonInstalarComponent],
   templateUrl: './login.component.html',
   styleUrl: './login.component.css',
 })

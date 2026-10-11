@@ -12,9 +12,11 @@ from sqlalchemy import bindparam, text
 from extensions import db
 
 # Quién puede ver todos los almacenes (el almacenista solo ve el suyo)
-ROLES_VEN_TODO = {"admin", "comprador", "rh"}
+ROLES_VEN_TODO = {"admin", "comprador", "supervisor", "rh"}
 # Quién puede mover inventario (prestar, recibir, agregar, traspasar)
 ROLES_ESCRIBEN = {"admin", "almacenista"}
+# Quién puede cambiar el estado de una pieza (mantenimiento, reparación...) y corregir el stock
+ROLES_AJUSTAN = {"admin", "almacenista", "comprador", "supervisor"}
 
 
 class ErrorNegocio(Exception):
@@ -34,15 +36,20 @@ def transaccion(vista):
 
     @wraps(vista)
     def envoltura(*args, **kwargs):
+        import telegram_alertas  # aquí para no crear un import circular
+
         try:
             respuesta = vista(*args, **kwargs)
             db.session.commit()
+            telegram_alertas.despachar()  # los avisos salen solo si sí se guardó
             return respuesta
         except ErrorNegocio as e:
             db.session.rollback()
+            telegram_alertas.descartar()
             return error(e.mensaje, e.status, **e.extra)
         except Exception:
             db.session.rollback()
+            telegram_alertas.descartar()
             raise
 
     return envoltura
@@ -84,12 +91,13 @@ def almacenes_permitidos():
     return {propio: todos[propio]} if propio in todos else {}
 
 
-def exigir_almacen(nombre, escribir=False):
-    """id del almacén si el usuario puede usarlo; si no, ErrorNegocio 403."""
+def exigir_almacen(nombre, escribir=False, roles=ROLES_ESCRIBEN):
+    """id del almacén si el usuario puede usarlo; si no, ErrorNegocio 403.
+    escribir=True además exige uno de los roles (por defecto, los que prestan)."""
     permitidos = almacenes_permitidos()
     if nombre not in permitidos:
         raise ErrorNegocio("No tienes acceso a ese almacén.", 403)
-    if escribir and g.usuario.rol not in ROLES_ESCRIBEN:
+    if escribir and g.usuario.rol not in roles:
         raise ErrorNegocio("Tu usuario solo puede consultar.", 403)
     return permitidos[nombre]
 

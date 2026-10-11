@@ -105,7 +105,7 @@ CREATE TABLE IF NOT EXISTS usuario (
     nombre_completo VARCHAR(200) NOT NULL,
     username VARCHAR(50) NOT NULL UNIQUE,          -- para trabajadores (rol solicitante): su NSS
     password_hash VARCHAR(255) NOT NULL,
-    rol ENUM('admin', 'rh', 'almacenista', 'comprador', 'solicitante') NOT NULL,
+    rol ENUM('admin', 'rh', 'almacenista', 'comprador', 'supervisor', 'solicitante') NOT NULL,
     id_almacen INT NULL,                           -- solo almacenista: el ÚNICO almacén que ve y presta
     id_trabajador INT NULL UNIQUE,                 -- solo solicitante: su ficha de trabajador
     activo BOOLEAN NOT NULL DEFAULT TRUE,
@@ -169,6 +169,7 @@ CREATE TABLE IF NOT EXISTS inventario_almacen_individual (
         'en uso',
         'dañado',
         'en reparación',
+        'en mantenimiento',
         'baja'
     ) NOT NULL DEFAULT 'disponible',
     ultima_inspeccion DATE NULL,                   -- copia de la más reciente en la tabla inspeccion
@@ -397,7 +398,7 @@ FROM (
     SELECT i.id_almacen, i.id_catalogo,
            SUM(i.estatus = 'disponible'),
            SUM(i.estatus = 'en uso'),
-           SUM(i.estatus IN ('dañado', 'en reparación'))
+           SUM(i.estatus IN ('dañado', 'en reparación', 'en mantenimiento'))
     FROM inventario_almacen_individual i
     WHERE i.estatus <> 'baja'
     GROUP BY i.id_almacen, i.id_catalogo

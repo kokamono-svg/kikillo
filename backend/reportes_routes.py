@@ -23,7 +23,7 @@ TIPOS_MOVIMIENTO = {"ENTREGA", "DEVOLUCION", "REPOSICION", "DANO", "PERDIDA", "E
 def acceso():
     if request.method == "OPTIONS":
         return None
-    return verificar_sesion(("admin", "almacenista", "comprador", "rh"))
+    return verificar_sesion(("admin", "almacenista", "comprador", "supervisor", "rh"))
 
 
 def _almacenes():
@@ -54,7 +54,7 @@ def existencias():
         """SELECT a.nombre_almacen AS almacen, c.clave, c.nombre, c.tipo, c.tipo_retorno, c.stock_minimo,
                   SUM(i.estatus = 'disponible' AND (i.certificacion_vence IS NULL OR i.certificacion_vence >= :hoy)) AS disponibles,
                   SUM(i.estatus = 'en uso') AS prestadas,
-                  SUM(i.estatus IN ('dañado', 'en reparación') OR (i.estatus = 'disponible' AND i.certificacion_vence < :hoy)) AS no_aptas,
+                  SUM(i.estatus IN ('dañado', 'en reparación', 'en mantenimiento') OR (i.estatus = 'disponible' AND i.certificacion_vence < :hoy)) AS no_aptas,
                   SUM(i.certificacion_vence < :hoy) AS cert_vencidas,
                   SUM(i.certificacion_vence BETWEEN :hoy AND :aviso) AS cert_por_vencer
            FROM inventario_almacen_individual i

@@ -52,3 +52,6 @@ __pycache__/
 backend/.env
 __pycache__/
 *.pyc
+
+# Cuándo se mandó el último resumen de Telegram
+backend/.alertas_estado.json

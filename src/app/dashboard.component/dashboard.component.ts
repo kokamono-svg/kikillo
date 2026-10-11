@@ -4,8 +4,10 @@
 // módulos en una sola vista, con accesos directos a cada sección.
 // Usa el mismo marco (menú lateral + barra) que Almacén y RH.
 // =====================================================================
-import { Component, computed, inject } from '@angular/core';
+import { Component, computed, inject, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
+import { HttpClient, HttpErrorResponse } from '@angular/common/http';
+import { firstValueFrom } from 'rxjs';
 import { Router, RouterLink } from '@angular/router';
 import { AuthService } from '../auth/auth.service';
 import { OpcionMenu, PanelLayoutComponent } from '../compartido/panel-layout/panel-layout.component';
@@ -74,6 +76,35 @@ export class DashboardComponent {
   readonly certificaciones = computed(() => this.almacen.certificaciones(ALMACENES).filter((c) => c.estado !== 'vigente'));
   readonly vencidos = computed(() => this.vales().filter((v) => this.almacen.estadoDe(v) === 'vencido'));
   readonly recientes = computed(() => this.vales().slice(0, 5));
+
+  /* ---------- Alertas en Telegram ---------- */
+  private http = inject(HttpClient);
+  private apiAlertas = `${this.auth.apiUrl}/alertas`;
+  /** null = todavía no se sabe (o el backend no responde). */
+  readonly telegram = signal<{ configurado: boolean; hora: string } | null>(null);
+  readonly enviandoTelegram = signal<'prueba' | 'resumen' | null>(null);
+  readonly avisoTelegram = signal<{ texto: string; ok: boolean } | null>(null);
+
+  constructor() {
+    firstValueFrom(this.http.get<{ configurado: boolean; hora: string }>(`${this.apiAlertas}/estado`))
+      .then((e) => this.telegram.set(e))
+      .catch(() => this.telegram.set(null));
+  }
+
+  /** Manda al grupo un mensaje de prueba o el resumen del día. */
+  async enviarTelegram(que: 'prueba' | 'resumen'): Promise<void> {
+    this.enviandoTelegram.set(que);
+    this.avisoTelegram.set(null);
+    try {
+      await firstValueFrom(this.http.post(`${this.apiAlertas}/${que}`, {}));
+      this.avisoTelegram.set({ texto: que === 'prueba' ? 'Prueba enviada al grupo.' : 'Resumen enviado al grupo.', ok: true });
+    } catch (e) {
+      const mensaje = e instanceof HttpErrorResponse ? e.error?.mensaje : '';
+      this.avisoTelegram.set({ texto: mensaje || 'No se pudo enviar.', ok: false });
+    } finally {
+      this.enviandoTelegram.set(null);
+    }
+  }
 
   porcentaje(parte: number, total: number): number {
     return total ? Math.round((parte / total) * 100) : 0;

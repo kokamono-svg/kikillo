@@ -28,7 +28,7 @@ export const routes: Routes = [
   {
     // Mismo módulo para los 3 roles; lo que ve cada uno depende de su rol
     path: 'almacen',
-    canMatch: [requiereRol('admin', 'almacenista', 'comprador')],
+    canMatch: [requiereRol('admin', 'almacenista', 'comprador', 'supervisor')],
     loadChildren: () => import('./almacenista/almacen.routes').then((m) => m.ALMACEN_ROUTES),
   },
   { path: 'almacenista', redirectTo: 'almacen' },

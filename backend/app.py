@@ -10,18 +10,23 @@
 # Prueba de conexión: abre http://localhost:5000/api/salud
 # =====================================================================
 import os
+import re
+
+from pathlib import Path
 
 from dotenv import load_dotenv
-from flask import Flask, jsonify
+from flask import Flask, abort, jsonify, send_from_directory
 from flask_cors import CORS
 from sqlalchemy import text
 from sqlalchemy.engine import URL
 
+from alertas_routes import alertas_bp
 from almacen_routes import almacen_bp
 from auth_routes import auth_bp
 from extensions import db
 from reportes_routes import reportes_bp
 from rh_routes import rh_bp
+from telegram_alertas import iniciar_resumen_diario
 
 load_dotenv()  # lee backend/.env (usuario y contraseña NUNCA van en el código)
 
@@ -50,6 +55,7 @@ app.register_blueprint(auth_bp)
 app.register_blueprint(almacen_bp)
 app.register_blueprint(rh_bp)
 app.register_blueprint(reportes_bp)
+app.register_blueprint(alertas_bp)
 
 
 @app.get("/api/salud")
@@ -69,6 +75,39 @@ def salud():
     return jsonify(ok=True, base=base, tablas=[dict(t) for t in tablas])
 
 
+# ---------------------------------------------------------------------
+# App de Angular ya compilada (npx ng build) en el mismo servidor que la API.
+# Así basta un solo túnel/dominio para usarla en el celular e instalarla
+# como app (PWA). Si no existe la carpeta, Flask solo sirve la API.
+# ---------------------------------------------------------------------
+APP_ANGULAR = Path(__file__).resolve().parent.parent / "dist" / "hackathon" / "browser"
+
+
+@app.get("/")
+@app.get("/<path:ruta>")
+def app_angular(ruta=""):
+    if ruta.startswith("api/") or not (APP_ANGULAR / "index.html").exists():
+        abort(404)
+    archivo = APP_ANGULAR / ruta
+    if ruta and archivo.is_file() and APP_ANGULAR in archivo.resolve().parents:
+        # chunk-AB12cd34.js / styles-XYZ.css llevan huella: nunca cambian, se guardan un año
+        con_huella = re.search(r"-[A-Za-z0-9_]{8,}\.(js|css)$", ruta)
+        respuesta = send_from_directory(APP_ANGULAR, ruta, max_age=31_536_000 if con_huella else None)
+    elif Path(ruta).suffix:
+        # Archivo que ya no existe (p. ej. el styles-XXXX.css de una versión anterior): 404.
+        # Si se respondiera index.html, el celular guardaría HTML como si fuera CSS y la app
+        # se vería sin estilos.
+        abort(404)
+    else:
+        respuesta = send_from_directory(APP_ANGULAR, "index.html")  # rutas de Angular (/almacen/...)
+    # index.html y el service worker siempre frescos: así el celular recibe las versiones nuevas
+    if ruta in ("", "index.html", "ngsw-worker.js", "ngsw.json", "manifest.webmanifest") or not archivo.is_file():
+        respuesta.headers["Cache-Control"] = "no-cache"
+    return respuesta
+
+
 if __name__ == "__main__":
     # FLASK_DEBUG=1 solo en tu computadora: en el servidor el modo debug permite ejecutar código
-    app.run(host="127.0.0.1", port=5000, debug=os.environ.get("FLASK_DEBUG") == "1")
+    app.debug = os.environ.get("FLASK_DEBUG") == "1"
+    iniciar_resumen_diario(app)  # resumen diario en Telegram (si está configurado)
+    app.run(host="0.0.0.0", port=5000, debug=os.environ.get("FLASK_DEBUG") == "1")

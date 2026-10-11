@@ -5,7 +5,8 @@ import { ALMACENES } from './almacen.service';
 /* =====================================================
    QUÉ PUEDE VER Y HACER CADA ROL EN EL ALMACÉN
      admin       → todos los almacenes, puede prestar
-     comprador   → todos los almacenes, solo consulta
+     comprador   → todos los almacenes, cambia estados y stock (no presta)
+     supervisor  → todos los almacenes, cambia estados y stock (no presta)
      almacenista → solo su almacén, puede prestar
 
    Igual que en los guards: esto solo decide qué se
@@ -20,10 +21,13 @@ export class AccesoAlmacen {
   private readonly rol = computed(() => this.auth.usuario()?.rol);
 
   /** Puede consultar todos los almacenes (y elegir cuál ver). */
-  readonly veTodos = computed(() => this.rol() === 'admin' || this.rol() === 'comprador');
+  readonly veTodos = computed(() => ['admin', 'comprador', 'supervisor'].includes(this.rol() ?? ''));
 
   /** Puede registrar préstamos y devoluciones. */
   readonly puedePrestar = computed(() => this.rol() === 'admin' || this.rol() === 'almacenista');
+
+  /** Puede cambiar el estado de una pieza (mantenimiento, reparación...) y corregir el stock. */
+  readonly puedeAjustar = computed(() => ['admin', 'almacenista', 'comprador', 'supervisor'].includes(this.rol() ?? ''));
 
   /** Almacenes a los que tiene acceso. */
   readonly almacenes = computed(() => {
@@ -51,7 +55,9 @@ export class AccesoAlmacen {
       case 'admin':
         return 'Administrador';
       case 'comprador':
-        return 'Compras · solo consulta';
+        return 'Compras';
+      case 'supervisor':
+        return 'Supervisor';
       case 'almacenista':
         return this.almacenes()[0] ?? 'Sin almacén asignado';
       default:

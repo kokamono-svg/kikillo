@@ -16,6 +16,7 @@ import { NavigationEnd, Router, RouterLink, RouterLinkActive } from '@angular/ro
 import { filter } from 'rxjs/operators';
 import { AuthService, Rol } from '../../auth/auth.service';
 import { ICONOS } from './iconos';
+import { BotonInstalarComponent } from '../pwa/boton-instalar.component';
 
 export interface OpcionMenu {
   ruta: string;
@@ -36,13 +37,13 @@ type Modulo = 'panel' | 'almacen' | 'rh';
  */
 const MODULOS: { id: Modulo; ruta: string; texto: string; icono: string; roles: Rol[]; soloVer?: Rol[] }[] = [
   { id: 'panel', ruta: '/dashboard', texto: 'Panel general', icono: ICONOS.barras, roles: ['admin'] },
-  { id: 'almacen', ruta: '/almacen', texto: 'Almacén', icono: ICONOS.almacen, roles: ['admin', 'almacenista', 'comprador'] },
+  { id: 'almacen', ruta: '/almacen', texto: 'Almacén', icono: ICONOS.almacen, roles: ['admin', 'almacenista', 'comprador', 'supervisor'] },
   { id: 'rh', ruta: '/rh', texto: 'Recursos Humanos', icono: ICONOS.personas, roles: ['rh'], soloVer: ['almacenista'] },
 ];
 
 @Component({
   selector: 'app-panel-layout',
-  imports: [RouterLink, RouterLinkActive],
+  imports: [RouterLink, RouterLinkActive, BotonInstalarComponent],
   templateUrl: './panel-layout.component.html',
   host: { class: 'block' },
 })

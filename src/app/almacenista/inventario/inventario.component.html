@@ -91,11 +91,21 @@
                   }
                 </p>
               </div>
-              <span
-                class="shrink-0 rounded-full px-2 py-0.5 text-xs font-medium"
-                [class]="claseTipo[r.tipo]"
-                >{{ r.tipo }}</span
-              >
+              <div class="flex shrink-0 flex-col items-end gap-1.5">
+                <span class="rounded-full px-2 py-0.5 text-xs font-medium" [class]="claseTipo[r.tipo]">{{ r.tipo }}</span>
+                @if (acceso.puedeAjustar()) {
+                  <button
+                    type="button"
+                    (click)="actualizando.set(r.codigo)"
+                    [disabled]="variosAlmacenes()"
+                    [title]="variosAlmacenes() ? 'Elige un almacén arriba para actualizar' : (r.piezas.length ? 'Cambiar el estado de sus piezas' : 'Registrar el conteo real')"
+                    class="inline-flex h-7 items-center gap-1 rounded-lg px-2 text-xs font-semibold text-blue-700 ring-1 ring-blue-200 transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:text-gray-400 disabled:ring-gray-200 dark:text-blue-300 dark:ring-blue-500/30 dark:hover:bg-blue-500/10"
+                  >
+                    <svg class="size-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125" /></svg>
+                    Actualizar
+                  </button>
+                }
+              </div>
             </div>
 
             <!-- Cifras: en celular van en una fila de 3 con su etiqueta -->
@@ -172,9 +182,16 @@
   <p class="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500 dark:text-gray-400">
     <span class="inline-flex items-center gap-1.5"><span class="size-2 rounded-full bg-emerald-500"></span>Pieza disponible</span>
     <span class="inline-flex items-center gap-1.5"><span class="size-2 rounded-full bg-blue-500"></span>Prestada</span>
-    <span class="inline-flex items-center gap-1.5"><span class="size-2 rounded-full bg-orange-400"></span>No apta (no se entrega)</span>
+    <span class="inline-flex items-center gap-1.5"><span class="size-2 rounded-full bg-gray-400"></span>En mantenimiento</span>
+    <span class="inline-flex items-center gap-1.5"><span class="size-2 rounded-full bg-orange-400"></span>En reparación</span>
+    <span class="inline-flex items-center gap-1.5"><span class="size-2 rounded-full bg-red-500"></span>Dañada (no se entrega)</span>
     <span class="inline-flex items-center gap-1.5"><span class="size-2 rounded-full bg-orange-400"></span>Certificación por vencer</span>
     <span class="inline-flex items-center gap-1.5"><span class="size-2 rounded-full bg-red-500"></span>Certificación vencida (no se entrega)</span>
     <a routerLink="/almacen/certificaciones" class="font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400">Ver certificaciones →</a>
   </p>
 </div>
+
+<!-- Ventana para cambiar estados o registrar el conteo -->
+@if (actualizando(); as codigo) {
+  <app-actualizar-articulo [nombreAlmacen]="acceso.actual()" [codigo]="codigo" (cerrar)="actualizando.set(null)" />
+}

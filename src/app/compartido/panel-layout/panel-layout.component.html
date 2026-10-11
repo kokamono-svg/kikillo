@@ -70,6 +70,7 @@
               <p class="truncate text-xs text-gray-500" [class]="claro() ? '' : 'dark:text-gray-400'">{{ etiqueta() }}</p>
             </div>
             <div class="my-1 h-px bg-gray-100" [class]="claro() ? '' : 'dark:bg-white/10'"></div>
+            <app-boton-instalar compacto />
             <button
               type="button"
               (click)="auth.cerrarSesion()"

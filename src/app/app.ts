@@ -1,5 +1,6 @@
-import { Component, signal } from '@angular/core';
+import { Component, inject } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
+import { PwaService } from './compartido/pwa/pwa.service';
 
 @Component({
   imports: [RouterOutlet],
@@ -8,5 +9,6 @@ import { RouterOutlet } from '@angular/router';
   templateUrl: './app.html',
 })
 export class App {
-  protected readonly title = signal('hackathon');
+  /** Avisa cuando se publicó una versión nueva de la app (PWA). */
+  readonly pwa = inject(PwaService);
 }

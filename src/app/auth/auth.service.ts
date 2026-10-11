@@ -16,7 +16,7 @@ import { Router } from '@angular/router';
 import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
 
-export type Rol = 'admin' | 'rh' | 'almacenista' | 'comprador' | 'solicitante';
+export type Rol = 'admin' | 'rh' | 'almacenista' | 'comprador' | 'supervisor' | 'solicitante';
 
 export interface Usuario {
   usuario: string;
@@ -48,6 +48,7 @@ const INICIO: Record<Rol, string> = {
   rh: '/rh',
   almacenista: '/almacen',
   comprador: '/almacen/stock', // Compras entra directo al stock de cada almacén
+  supervisor: '/almacen/inventario',
   solicitante: '/solicitante',
 };
 
@@ -56,8 +57,13 @@ export class AuthService {
   private http = inject(HttpClient);
   private router = inject(Router);
 
-  /** URL de la API de Flask. Cámbiala por la del VPS al publicar. */
-  readonly apiUrl = 'http://localhost:5000/api';
+  /**
+   * URL de la API de Flask. Es relativa (mismo dominio que la app) para que funcione
+   * igual en la computadora, en el celular y por el túnel de Cloudflare:
+   *   - ng serve  → proxy.conf.json la manda a Flask (127.0.0.1:5000)
+   *   - compilada → Flask sirve la app y la API juntas (python app.py)
+   */
+  readonly apiUrl = '/api';
 
   private sesion = signal<Sesion | null>(this.leerSesion());
 

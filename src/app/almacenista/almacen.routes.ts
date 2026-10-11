@@ -14,7 +14,7 @@ export const ALMACEN_ROUTES: Routes = [
       {
         path: 'stock',
         title: 'Almacén · Stock por almacén',
-        canMatch: [requiereRol('admin', 'comprador')],
+        canMatch: [requiereRol('admin', 'comprador', 'supervisor')],
         loadComponent: () => import('./stock/stock-almacenes.component').then((m) => m.StockAlmacenesComponent),
       },
       { path: 'prestamos', title: 'Almacén · Préstamos', loadComponent: () => import('./prestamos/prestamos.component').then((m) => m.PrestamosComponent) },

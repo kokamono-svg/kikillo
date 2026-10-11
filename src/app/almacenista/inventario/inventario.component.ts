@@ -10,6 +10,9 @@ import { AlmacenService, diasParaVencer, estadoCertificacion } from '../almacen.
 import { Pieza, TipoArticulo } from '../almacen.models';
 import { CLASE_TIPO } from '../estado-prestamo';
 import { contieneCodigo } from '../../compartido/codigos';
+import { BotonEscanerComponent } from '../../compartido/escaner/boton-escaner.component';
+import { LectorDirective } from '../../compartido/escaner/lector.directive';
+import { ActualizarArticuloComponent, TEXTO_ESTATUS, estatusDe } from './actualizar-articulo.component';
 
 /** Un renglón del inventario (puede sumar varios almacenes). */
 interface Renglon {
@@ -25,12 +28,10 @@ interface Renglon {
   porAlmacen: { almacen: string; disponibles: number; bajo: boolean }[];
   piezas: Pieza[];
 }
-import { BotonEscanerComponent } from '../../compartido/escaner/boton-escaner.component';
-import { LectorDirective } from '../../compartido/escaner/lector.directive';
 
 @Component({
   selector: 'app-almacen-inventario',
-  imports: [RouterLink, BotonEscanerComponent, LectorDirective],
+  imports: [RouterLink, BotonEscanerComponent, LectorDirective, ActualizarArticuloComponent],
   templateUrl: './inventario.component.html',
 })
 export class InventarioComponent {
@@ -41,6 +42,8 @@ export class InventarioComponent {
   readonly busqueda = signal('');
   readonly tipo = signal<TipoArticulo | ''>('');
   readonly soloBajo = signal(false);
+  /** Código del artículo que se está actualizando (estado de piezas o conteo). */
+  readonly actualizando = signal<string | null>(null);
 
   readonly variosAlmacenes = computed(() => this.acceso.enVista().length > 1);
 
@@ -100,6 +103,9 @@ export class InventarioComponent {
   }
 
   clasePieza(p: Pieza): string {
+    const estatus = estatusDe(p);
+    if (estatus === 'en mantenimiento') return 'border-dashed border-gray-400 bg-gray-100 text-gray-600 dark:border-white/30 dark:bg-white/10 dark:text-gray-300';
+    if (estatus === 'dañado') return 'border-red-300 bg-red-50 text-red-700 line-through dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-300';
     const cert = estadoCertificacion(p);
     if (cert === 'vencida' && p.estado !== 'no apto') return 'border-red-300 bg-red-50 text-red-700 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-300';
     if (cert === 'por-vencer' && !p.prestada && p.estado !== 'no apto') return 'border-orange-300 bg-orange-50 text-orange-800 dark:border-orange-500/40 dark:bg-orange-500/10 dark:text-orange-300';
@@ -109,7 +115,7 @@ export class InventarioComponent {
   }
 
   textoPieza(p: Pieza): string {
-    const base = p.estado === 'no apto' ? 'No apta' : p.prestada ? 'Prestada' : 'Disponible';
+    const base = TEXTO_ESTATUS[estatusDe(p)];
     const cert = estadoCertificacion(p);
     if (cert === 'no-aplica') return base;
     const dias = diasParaVencer(p);

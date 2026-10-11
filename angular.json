@@ -44,7 +44,8 @@
                   "maximumError": "8kB"
                 }
               ],
-              "outputHashing": "all"
+              "outputHashing": "all",
+              "serviceWorker": "ngsw-config.json"
             },
             "development": {
               "optimization": false,
@@ -58,8 +59,10 @@
 "serve": {
   "builder": "@angular/build:dev-server",
   "options": {
+    "proxyConfig": "proxy.conf.json",
     "allowedHosts": [
-      "assumptions-floor-continental-playstation.trycloudflare.com"
+      "assumptions-floor-continental-playstation.trycloudflare.com",
+      ".trycloudflare.com"
     ]
   },
   "configurations": {

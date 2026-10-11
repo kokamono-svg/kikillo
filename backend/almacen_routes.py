@@ -21,12 +21,16 @@ from flask import Blueprint, g, jsonify, request
 
 from auth_routes import verificar_sesion
 from codigos import SQL_LLAVE, limpiar_codigo, llave_codigo
-from comun import (ErrorNegocio, almacenes_permitidos, ejecutar, exigir_almacen, iso, leer_fecha, q,
+from comun import (ROLES_AJUSTAN, ErrorNegocio, almacenes_permitidos, ejecutar, exigir_almacen, iso, leer_fecha, q,
                    tipo_app, todos_los_almacenes, transaccion, uno)
+import telegram_alertas
 
 almacen_bp = Blueprint("almacen", __name__, url_prefix="/api/almacen")
 
 DIAS_AVISO_CERTIFICACION = 30
+# Estados que se ponen a mano ("en uso" lo ponen los préstamos; "baja" no se maneja aquí)
+ESTATUS_MANUALES = ("disponible", "en mantenimiento", "en reparación", "dañado")
+ESTATUS_NO_APTO = ("dañado", "en reparación", "en mantenimiento")
 MAX_FOTOS_POR_RENGLON = 4
 MAX_IMAGEN = 1_500_000  # caracteres de una imagen en base64 (~1 MB)
 
@@ -35,7 +39,7 @@ MAX_IMAGEN = 1_500_000  # caracteres de una imagen en base64 (~1 MB)
 def solo_almacen():
     if request.method == "OPTIONS":
         return None
-    return verificar_sesion(("admin", "almacenista", "comprador"))
+    return verificar_sesion(("admin", "almacenista", "comprador", "supervisor"))
 
 
 # =====================================================================
@@ -52,7 +56,8 @@ SQL_CATALOGO = """
 def _pieza_json(p):
     return {
         "serie": p.codigo,
-        "estado": "no apto" if p.estatus in ("dañado", "en reparación") else "apto",
+        "estado": "no apto" if p.estatus in ESTATUS_NO_APTO else "apto",
+        "estatus": p.estatus,
         "ultimaInspeccion": iso(p.ultima_inspeccion) or "",
         "prestada": p.estatus == "en uso",
         **({"certificacionVence": iso(p.certificacion_vence)} if p.certificacion_vence else {}),
@@ -345,6 +350,13 @@ def crear_vale():
             ejecutar("UPDATE inventario_almacen_individual SET estatus = 'en uso' WHERE id_invalmind = :p", p=p.id_invalmind)
         else:
             _descontar_granel(id_alm, c.id_catalogo, cantidad)
+
+    # ---------- Avisos a Telegram (salen después de guardar) ----------
+    supervisor = str(d.get("autorizoSupervisor") or "").strip()
+    excedidos = {c.id_catalogo: (c, cantidades[c.id_catalogo]) for c, _, _ in preparados if cantidades[c.id_catalogo] > c.limite_por_vale}
+    if supervisor and excedidos:
+        telegram_alertas.alerta_autorizacion(folio, nombre_almacen, nombre, supervisor, list(excedidos.values()))
+    telegram_alertas.revisar_stock_bajo(id_alm, nombre_almacen, [(c, n) for c, _, n in preparados])
     return jsonify(vales_de(folio=folio)[0]), 201
 
 
@@ -388,7 +400,7 @@ def _sumar_granel(id_alm, c, cantidad, danados=0):
 def devolver(folio):
     """POST /api/almacen/vales/<folio>/devolucion  {recepciones: [{condicion, danadas?, notas?, fotos?} | null por renglón]}"""
     v = uno(
-        "SELECT v.id_vale, v.id_almacen, v.id_trabajador, v.devuelto_en, a.nombre_almacen FROM vale v JOIN almacen a ON a.id_almacen = v.id_almacen WHERE v.folio = :f AND v.tipo = 'ENTREGA' FOR UPDATE",
+        "SELECT v.id_vale, v.id_almacen, v.id_trabajador, v.nombre_trabajador, v.devuelto_en, a.nombre_almacen FROM vale v JOIN almacen a ON a.id_almacen = v.id_almacen WHERE v.folio = :f AND v.tipo = 'ENTREGA' FOR UPDATE",
         f=folio,
     )
     if not v:
@@ -398,11 +410,14 @@ def devolver(folio):
         raise ErrorNegocio("Ese vale ya se devolvió.", 409)
     recepciones = (request.get_json(silent=True) or {}).get("recepciones") or []
     detalles = q(
-        """SELECT d.id_vale_detalle, d.id_catalogo, d.id_invalmind, d.cantidad, c.tipo_retorno, c.clave
-           FROM vale_detalle d JOIN catalogo c ON c.id_catalogo = d.id_catalogo WHERE d.id_vale = :v ORDER BY d.id_vale_detalle""",
+        """SELECT d.id_vale_detalle, d.id_catalogo, d.id_invalmind, d.cantidad, c.tipo_retorno, c.clave, c.nombre, i.codigo AS serie
+           FROM vale_detalle d JOIN catalogo c ON c.id_catalogo = d.id_catalogo
+           LEFT JOIN inventario_almacen_individual i ON i.id_invalmind = d.id_invalmind
+           WHERE d.id_vale = :v ORDER BY d.id_vale_detalle""",
         v=v.id_vale,
     )
     ahora = datetime.now().replace(microsecond=0)
+    danados = []  # para avisar a Telegram
     for i, d in enumerate(detalles):
         if d.tipo_retorno == "Consumible":
             continue  # los consumibles no regresan
@@ -419,6 +434,8 @@ def devolver(folio):
             if str(foto).startswith("data:image") and len(foto) <= MAX_IMAGEN:
                 ejecutar("INSERT INTO vale_detalle_foto (id_vale_detalle, imagen) VALUES (:d, :img)", d=d.id_vale_detalle, img=foto)
         buenas = d.cantidad - danadas
+        if danadas:
+            danados.append((d.nombre, d.serie, danadas, notas))
         for tipo, cantidad in (("DEVOLUCION", buenas), ("DANO", danadas)):
             if cantidad > 0:
                 ejecutar(
@@ -434,6 +451,8 @@ def devolver(folio):
             c = _catalogo_por_clave(d.clave)
             _sumar_granel(v.id_almacen, c, buenas, danadas)
     ejecutar("UPDATE vale SET devuelto_en = :f WHERE id_vale = :v", f=ahora, v=v.id_vale)
+    if danados:
+        telegram_alertas.alerta_danos(folio, v.nombre_almacen, v.nombre_trabajador, danados)
     return jsonify(vales_de(folio=folio)[0])
 
 
@@ -560,6 +579,99 @@ def recertificar():
 
 
 # =====================================================================
+# ESTADO DE UNA PIEZA Y AJUSTE DE STOCK
+# (almacenista, compras, supervisor y admin; cada cambio avisa a Telegram)
+# =====================================================================
+@almacen_bp.post("/piezas/estado")
+@transaccion
+def cambiar_estado_pieza():
+    """POST /api/almacen/piezas/estado  {almacen, serie, estatus, notas?}"""
+    d = request.get_json(silent=True) or {}
+    nombre_almacen = d.get("almacen") or ""
+    id_alm = exigir_almacen(nombre_almacen, escribir=True, roles=ROLES_AJUSTAN)
+    nuevo = d.get("estatus") or ""
+    if nuevo not in ESTATUS_MANUALES:
+        raise ErrorNegocio("Estado inválido.")
+    notas = str(d.get("notas") or "").strip()[:300]
+    serie = limpiar_codigo(d.get("serie"))
+    p = uno(
+        f"""SELECT i.id_invalmind, i.codigo, i.estatus, c.clave FROM inventario_almacen_individual i
+            JOIN catalogo c ON c.id_catalogo = i.id_catalogo
+            WHERE i.id_almacen = :a AND {SQL_LLAVE.format(col='i.codigo')} = :s AND i.estatus <> 'baja' FOR UPDATE""",
+        a=id_alm, s=llave_codigo(serie),
+    )
+    if not p:
+        raise ErrorNegocio(f"La serie {serie} no está en {nombre_almacen}.", 404)
+    if p.estatus == "en uso":
+        raise ErrorNegocio(f"{p.codigo} está prestado: primero debe devolverse.", 409)
+    if p.estatus == nuevo:
+        raise ErrorNegocio(f"{p.codigo} ya está {nuevo}.")
+    if nuevo != "disponible" and not notas:
+        raise ErrorNegocio("Escribe el motivo (qué tiene o qué se le hará).")
+
+    c = _catalogo_por_clave(p.clave)
+    # Si regresa de mantenimiento o reparación, cuenta como inspección de hoy
+    ejecutar(
+        """UPDATE inventario_almacen_individual
+           SET estatus = :e, ultima_inspeccion = IF(:e = 'disponible', CURDATE(), ultima_inspeccion)
+           WHERE id_invalmind = :p""",
+        e=nuevo, p=p.id_invalmind,
+    )
+    ejecutar(
+        """INSERT INTO movimiento (tipo, id_almacen, id_catalogo, id_invalmind, cantidad, id_usuario, notas)
+           VALUES ('AJUSTE', :a, :c, :p, 1, :u, :n)""",
+        a=id_alm, c=c.id_catalogo, p=p.id_invalmind, u=g.usuario.id,
+        n=f"Estado: {p.estatus} → {nuevo}" + (f" · {notas}" if notas else ""),
+    )
+    telegram_alertas.alerta_estado_pieza(p.codigo, c.nombre, nombre_almacen, p.estatus, nuevo, g.usuario.nombre, notas)
+    if p.estatus == "disponible":
+        telegram_alertas.revisar_stock_bajo(id_alm, nombre_almacen, [(c, 1)])
+    return jsonify(ok=True, serie=p.codigo, estatus=nuevo)
+
+
+@almacen_bp.post("/stock")
+@transaccion
+def ajustar_stock():
+    """POST /api/almacen/stock  {almacen, codigo, cantidad, notas}: conteo físico de lo que se maneja por cantidad."""
+    d = request.get_json(silent=True) or {}
+    nombre_almacen = d.get("almacen") or ""
+    id_alm = exigir_almacen(nombre_almacen, escribir=True, roles=ROLES_AJUSTAN)
+    c = _catalogo_por_clave(d.get("codigo"))
+    if c.tipo_seguimiento == "Individual":
+        raise ErrorNegocio(f"{c.nombre} se maneja por pieza: cambia el estado de cada serie o agrega piezas nuevas.")
+    try:
+        nueva = int(d.get("cantidad"))
+    except (TypeError, ValueError):
+        raise ErrorNegocio("Escribe la cantidad que hay en el almacén.") from None
+    if not 0 <= nueva <= 100_000:
+        raise ErrorNegocio("La cantidad debe ser de 0 a 100,000.")
+    notas = str(d.get("notas") or "").strip()[:300]
+    if not notas:
+        raise ErrorNegocio("Escribe el motivo del ajuste (conteo físico, merma, compra...).")
+    antes = int(uno(
+        "SELECT COALESCE(SUM(cantidad), 0) AS n FROM inventario_almacen_conjunto WHERE id_almacen = :a AND id_catalogo = :c FOR UPDATE",
+        a=id_alm, c=c.id_catalogo,
+    ).n)
+    diferencia = nueva - antes
+    if diferencia == 0:
+        raise ErrorNegocio(f"{c.nombre} ya tiene {antes}: no hay nada que ajustar.")
+    if diferencia > 0:
+        _sumar_granel(id_alm, c, diferencia)
+    else:
+        _descontar_granel(id_alm, c.id_catalogo, -diferencia)
+    ejecutar(
+        """INSERT INTO movimiento (tipo, id_almacen, id_catalogo, cantidad, id_usuario, notas)
+           VALUES ('AJUSTE', :a, :c, :n, :u, :notas)""",
+        a=id_alm, c=c.id_catalogo, n=abs(diferencia), u=g.usuario.id,
+        notas=f"Stock: {antes} → {nueva} ({diferencia:+d}) · {notas}",
+    )
+    telegram_alertas.alerta_ajuste_stock(c, nombre_almacen, antes, nueva, g.usuario.nombre, notas)
+    if diferencia < 0:
+        telegram_alertas.revisar_stock_bajo(id_alm, nombre_almacen, [(c, -diferencia)])
+    return jsonify(ok=True, codigo=c.clave, antes=antes, cantidad=nueva)
+
+
+# =====================================================================
 # TRASPASOS ENTRE ALMACENES
 # =====================================================================
 @almacen_bp.get("/traspasos")
@@ -656,4 +768,7 @@ def traspasar():
                 tipo=tipo, a=alm, c=c.id_catalogo, p=p.id_invalmind if p else None, t=id_t, n=cantidad, u=g.usuario.id,
                 notas=f"{folio}: {origen} → {destino}",
             )
-    return jsonify(ok=True, folio=folio, piezas=sum(x[2] for x in preparados)), 201
+    piezas = sum(x[2] for x in preparados)
+    telegram_alertas.alerta_traspaso(folio, origen, destino, piezas, g.usuario.nombre, str(d.get("notas") or "").strip())
+    telegram_alertas.revisar_stock_bajo(id_origen, origen, [(c, n) for c, _, n in preparados])
+    return jsonify(ok=True, folio=folio, piezas=piezas), 201

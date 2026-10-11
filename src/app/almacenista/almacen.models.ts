@@ -19,9 +19,13 @@ export type EstadoPieza = 'apto' | 'no apto';
  * El reto pide que el equipo de alturas se controle POR PIEZA,
  * no solo por cantidad, para saber qué arnés exacto tiene cada quien.
  */
+/** Estado real de una pieza en la BD ("en uso" = prestada). */
+export type EstatusPieza = 'disponible' | 'en uso' | 'en mantenimiento' | 'en reparación' | 'dañado';
+
 export interface Pieza {
   serie: string; // código único, ej. ALT-024
-  estado: EstadoPieza;
+  estado: EstadoPieza; // apto / no apto (resumen para prestar)
+  estatus?: EstatusPieza; // detalle: mantenimiento, reparación, dañada
   ultimaInspeccion: string; // fecha AAAA-MM-DD
   prestada: boolean; // true = ya la tiene alguien
   certificacionVence?: string; // AAAA-MM-DD; solo en equipo que requiere certificación (arnés, detector...)
