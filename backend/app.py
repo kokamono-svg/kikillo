@@ -75,11 +75,6 @@ def salud():
     return jsonify(ok=True, base=base, tablas=[dict(t) for t in tablas])
 
 
-# ---------------------------------------------------------------------
-# App de Angular ya compilada (npx ng build) en el mismo servidor que la API.
-# Así basta un solo túnel/dominio para usarla en el celular e instalarla
-# como app (PWA). Si no existe la carpeta, Flask solo sirve la API.
-# ---------------------------------------------------------------------
 APP_ANGULAR = Path(__file__).resolve().parent.parent / "dist" / "hackathon" / "browser"
 
 
